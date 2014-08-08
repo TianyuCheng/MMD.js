@@ -15,7 +15,28 @@
       this.model_count = 0;
       this.models = {};
       this.renderers = {};
+      this.initMatrices();
     }
+
+    MMD.prototype.initMatrices = function() {
+      this.mvMatrixStack = [];
+      this.pMatrix = mat4.createIdentity();
+      return this.mvMatrix = mat4.createIdentity();
+    };
+
+    MMD.prototype.mvPushMatrix = function() {
+      var copy;
+      copy = mat4.create();
+      mat4.set(this.mvMatrix, copy);
+      return this.mvMatrixStack.push(copy);
+    };
+
+    MMD.prototype.mvPopMatrix = function() {
+      if (this.mvMatrixStack.length === 0) {
+        throw "Invalid popMatrix!";
+      }
+      return this.mvMatrix = this.mvMatrixStack.pop();
+    };
 
     MMD.prototype.initShaders = function() {
       var attributes, fshader, line, name, src, type, uniforms, vshader, _i, _j, _k, _l, _len, _len1, _len2, _len3, _ref, _ref1, _ref2;
@@ -121,7 +142,6 @@
         return function() {
           var now;
           _this.move();
-          _this.computeMatrices();
           _this.render();
           now = Date.now();
           if (++count % _this.fps === 0) {
@@ -171,9 +191,8 @@
       }
     };
 
-    MMD.prototype.computeMatrices = function() {
+    MMD.prototype.computeMatrices = function(modelMatrix) {
       var up;
-      this.modelMatrix = mat4.createIdentity();
       this.cameraPosition = vec3.create([0, 0, this.distance]);
       vec3.rotateX(this.cameraPosition, this.rotx);
       vec3.rotateY(this.cameraPosition, this.roty);
@@ -182,7 +201,7 @@
       vec3.rotateX(up, this.rotx);
       vec3.rotateY(up, this.roty);
       this.viewMatrix = mat4.lookAt(this.cameraPosition, this.center, up);
-      this.mvMatrix = mat4.createMultiply(this.viewMatrix, this.modelMatrix);
+      this.mvMatrix = mat4.createMultiply(this.viewMatrix, modelMatrix);
       this.pMatrix = mat4.perspective(this.fovy, this.width / this.height, 0.1, 1000.0);
       this.nMatrix = mat4.inverseTranspose(this.mvMatrix, mat4.create());
     };
@@ -192,14 +211,20 @@
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
       this.gl.viewport(0, 0, this.width, this.height);
       this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+      this.roty += Math.PI / 360;
       _ref = this.renderers;
       for (key in _ref) {
         renderer = _ref[key];
+        this.mvPushMatrix();
+        this.computeMatrices(renderer.modelMatrix);
+        this.setUniforms();
         renderer.render();
+        this.mvPopMatrix();
       }
-      this.setUniforms();
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
       this.gl.viewport(0, 0, this.width, this.height);
+      this.computeMatrices(mat4.createIdentity());
+      this.setUniforms();
       this.renderAxes();
       this.gl.flush();
     };
@@ -260,16 +285,16 @@
         return function(e) {
           switch (e.keyCode + e.shiftKey * 1000 + e.ctrlKey * 10000 + e.altKey * 100000) {
             case 37:
-              _this.roty += Math.PI / 12;
+              _this.roty += Math.PI / 48;
               break;
             case 39:
-              _this.roty -= Math.PI / 12;
+              _this.roty -= Math.PI / 48;
               break;
             case 38:
-              _this.rotx += Math.PI / 12;
+              _this.rotx += Math.PI / 48;
               break;
             case 40:
-              _this.rotx -= Math.PI / 12;
+              _this.rotx -= Math.PI / 48;
               break;
             case 33:
               _this.distance -= 3 * _this.distance / _this.DIST;
@@ -400,7 +425,7 @@
     MMD.prototype.initParameters = function() {
       this.ignoreCameraMotion = false;
       this.rotx = this.roty = 0;
-      this.distance = this.DIST = 35;
+      this.distance = this.DIST = 70;
       this.center = [0, 10, 0];
       this.fovy = 40;
       this.drawEdge = true;
@@ -1783,6 +1808,7 @@
       this.initVertices();
       this.initIndices();
       this.initTextures();
+      this.initMatrices();
       return;
     }
 
@@ -2286,6 +2312,22 @@
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone2Position.buffer);
       this.gl.bufferData(this.gl.ARRAY_BUFFER, positions2, this.gl.STATIC_DRAW);
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+    };
+
+    Renderer.prototype.initMatrices = function() {
+      return this.modelMatrix = mat4.createIdentity();
+    };
+
+    Renderer.prototype.translate = function(x, y, z) {
+      return mat4.translate(this.modelMatrix, [x, y, z]);
+    };
+
+    Renderer.prototype.scale = function(x, y, z) {
+      return mat4.scale(this.modelMatrix, [x, y, z]);
+    };
+
+    Renderer.prototype.rotate = function(angle, x, y, z) {
+      return mat4.rotate(this.modelMatrix, angle, [x, y, z]);
     };
 
     return Renderer;

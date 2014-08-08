@@ -2,10 +2,6 @@
 
 MikuMikuDance player on WebGL.
 
-== Demo
-
-- http://edv.sakura.ne.jp/mmd/
-
 == Features
 
 - PMD (model) and VMD (motion) parsers
