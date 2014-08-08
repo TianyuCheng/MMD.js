@@ -36,9 +36,9 @@ class this.MMD.Model # export to top level
     xhr.open('GET', @directory + '/' + @filename, true)
     xhr.responseType = 'arraybuffer'
     xhr.onload = =>
-      console.time('parse')
+      console.time("parse #{@filename}")
       @parse(xhr.response)
-      console.timeEnd('parse')
+      console.timeEnd("parse #{@filename}")
       callback()
     xhr.send()
 

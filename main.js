@@ -13,25 +13,39 @@ window.onload = function() {
   mmd.registerKeyListener(document);
   mmd.registerMouseListener(document);
 
-  var miku = new MMD.Model('model', 'Miku_Hatsune_Ver2.pmd');
-  //var miku = new MMD.Model('Lat', 'Normal.pmd');
-  //var miku = new MMD.Model('mobko', 'mobko.pmd');
-  //var miku = new MMD.Model('yufu', 'yufu.pmd');
-  //var miku = new MMD.Model('defoko', 'defoko.pmd');
-  miku.load(function() {
-    mmd.addModel(miku);
-    mmd.initBuffers();
+  mmd.addModel("miku", new MMD.Model('model', 'Miku_Hatsune_Ver2.pmd'));
+  mmd.addModel("rin", new MMD.Model('model', 'Rin_Kagamene_act2.pmd'));
+  mmd.addModel("len", new MMD.Model('model', 'Len_Kagamine.pmd'));
+  mmd.load(function() {
     mmd.start();
 
     var dance = new MMD.Motion('motion/kishimen.vmd');
     dance.load(function() {
-      mmd.addModelMotion(miku, dance, true);
-
-      mmd.play()
+      mmd.addModelMotion("miku", dance, true);
+      mmd.addModelMotion("rin", dance, true);
+      mmd.addModelMotion("len", dance, true);
+      mmd.play();
 
       setInterval(function() {
-        console.log('fps = ' + mmd.realFps);
+        // console.log('fps = ' + mmd.realFps);
       }, 1000);
     });
-  });
+  })
+
+  // miku.load(function() {
+  //   mmd.addModel(miku);
+  //   // mmd.initBuffers();
+  //   mmd.start();
+  //
+  //   // var dance = new MMD.Motion('motion/kishimen.vmd');
+  //   // dance.load(function() {
+  //   //   mmd.addModelMotion(miku, dance, true);
+  //   //
+  //   //   mmd.play()
+  //   //
+  //   //   setInterval(function() {
+  //   //     // console.log('fps = ' + mmd.realFps);
+  //   //   }, 1000);
+  //   // });
+  // });
 };
