@@ -112,8 +112,7 @@
         model = _ref[name];
         model.load(function() {
           var k, m, _ref1;
-          that.model_count--;
-          if (that.model_count <= 0) {
+          if (--that.model_count <= 0) {
             _ref1 = that.models;
             for (k in _ref1) {
               m = _ref1[k];
@@ -156,38 +155,12 @@
 
     MMD.prototype.move = function() {
       var key, renderer, _ref;
-      if (++this.frame > this.motionManager.lastFrame) {
-        this.pause();
-        this.frame = -1;
-        return;
-      }
-      this.moveCamera();
-      this.moveLight();
       _ref = this.renderers;
       for (key in _ref) {
         renderer = _ref[key];
-        renderer.move();
-      }
-    };
-
-    MMD.prototype.moveCamera = function() {
-      var camera;
-      camera = this.motionManager.getCameraFrame(this.frame);
-      if (camera && !this.ignoreCameraMotion) {
-        this.distance = camera.distance;
-        this.rotx = camera.rotation[0];
-        this.roty = camera.rotation[1];
-        this.center = vec3.create(camera.location);
-        this.fovy = camera.view_angle;
-      }
-    };
-
-    MMD.prototype.moveLight = function() {
-      var light;
-      light = this.motionManager.getLightFrame(this.frame);
-      if (light) {
-        this.lightDirection = light.location;
-        this.lightColor = light.color;
+        if (renderer.playing) {
+          renderer.move();
+        }
       }
     };
 
@@ -208,10 +181,13 @@
 
     MMD.prototype.render = function() {
       var key, renderer, _ref;
+      if (!this.redraw && !this.playing) {
+        return;
+      }
+      this.redraw = false;
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
       this.gl.viewport(0, 0, this.width, this.height);
       this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-      this.roty += Math.PI / 360;
       _ref = this.renderers;
       for (key in _ref) {
         renderer = _ref[key];
@@ -441,14 +417,6 @@
       this.realFps = this.fps;
       this.playing = false;
       this.frame = -1;
-    };
-
-    MMD.prototype.addCameraLightMotion = function(motion, merge_flag, frame_offset) {
-      this.motionManager.addCameraLightMotion(motion, merge_flag, frame_offset);
-    };
-
-    MMD.prototype.addModelMotion = function(modelName, motion, merge_flag, frame_offset) {
-      this.motionManager.addModelMotion(this.getModelRenderer(modelName).model, motion, merge_flag, frame_offset);
     };
 
     MMD.prototype.play = function() {
@@ -1460,7 +1428,7 @@
       this.addLightMotoin(motion.light, merge_flag, frame_offset);
     };
 
-    MotionManager.prototype.addCameraMotoin = function(camera, merge_flag, frame_offset) {
+    MotionManager.prototype.addCameraMotion = function(camera, merge_flag, frame_offset) {
       var c, frame, _i, _len;
       if (camera.length === 0) {
         return;
@@ -1809,6 +1777,9 @@
       this.initIndices();
       this.initTextures();
       this.initMatrices();
+      this.motions = {};
+      this.playing = false;
+      this.frame = -1;
       return;
     }
 
@@ -2075,13 +2046,20 @@
     };
 
     Renderer.prototype.move = function() {
-      this.motionManager = this.mmd.motionManager;
+      if (!this.playing || !this.motionManager) {
+        return;
+      }
+      if (++this.frame > this.motionManager.lastFrame) {
+        this.frame = -1;
+        this.playing = false;
+        return;
+      }
       this.moveModel();
     };
 
     Renderer.prototype.moveModel = function() {
       var bones, morphs, _ref;
-      _ref = this.mmd.motionManager.getModelFrame(this.model, this.mmd.frame), morphs = _ref.morphs, bones = _ref.bones;
+      _ref = this.motionManager.getModelFrame(this.model, this.frame), morphs = _ref.morphs, bones = _ref.bones;
       this.moveMorphs(this.model, morphs);
       this.moveBones(this.model, bones);
     };
@@ -2328,6 +2306,22 @@
 
     Renderer.prototype.rotate = function(angle, x, y, z) {
       return mat4.rotate(this.modelMatrix, angle, [x, y, z]);
+    };
+
+    Renderer.prototype.addModelMotion = function(motionName, motion, merge_flag, frame_offset) {
+      var motionManager;
+      motionManager = new MMD.MotionManager;
+      motionManager.addModelMotion(this.model, motion, merge_flag, frame_offset);
+      return this.motions[motionName] = motionManager;
+    };
+
+    Renderer.prototype.play = function(motionName) {
+      this.playing = true;
+      this.motionManager = this.motions[motionName];
+      if (!this.motion) {
+        console.err("" + motionName + " not found in the motions");
+      }
+      return this.frame = -1;
     };
 
     return Renderer;

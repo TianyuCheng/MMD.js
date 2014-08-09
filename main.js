@@ -13,7 +13,7 @@ window.onload = function() {
   mmd.registerKeyListener(document);
   mmd.registerMouseListener(document);
 
-  mmd.addModel("miku", new MMD.Model('model', 'Miku_Hatsune_Ver2.pmd'));
+  mmd.addModel("miku", new MMD.Model('model', 'Miku_Hatsune_metal.pmd'));
   mmd.addModel("rin", new MMD.Model('model', 'Rin_Kagamene_act2.pmd'));
   mmd.addModel("len", new MMD.Model('model', 'Len_Kagamine.pmd'));
   mmd.load(function() {
@@ -37,31 +37,34 @@ window.onload = function() {
 
     var dance = new MMD.Motion('motion/kishimen.vmd');
     dance.load(function() {
-      mmd.addModelMotion("miku", dance, true);
-      mmd.addModelMotion("rin", dance, true);
-      mmd.addModelMotion("len", dance, true);
-      mmd.play();
+      miku.addModelMotion("kishimen", dance, true);
+      rin.addModelMotion("kishimen", dance, true);
+      len.addModelMotion("kishimen", dance, true);
 
-      setInterval(function() {
-        // console.log('fps = ' + mmd.realFps);
-      }, 1000);
+      var mikudance = document.getElementById("dance");
+      mikudance.onclick = function() {
+        miku.play("kishimen");
+        rin.play("kishimen");
+        len.play("kishimen");
+      }
     });
+
+    var arm = new MMD.Motion('motion/arm.vmd');
+    arm.load(function() {
+      miku.addModelMotion("arm", arm, true);
+      rin.addModelMotion("arm", arm, true);
+      len.addModelMotion("arm", arm, true);
+
+      var mikuarm = document.getElementById("arm");
+      mikuarm.onclick = function() {
+        miku.play("arm");
+        rin.play("arm");
+        len.play("arm");
+      }
+    });
+
+    mmd.play();
+
   })
 
-  // miku.load(function() {
-  //   mmd.addModel(miku);
-  //   // mmd.initBuffers();
-  //   mmd.start();
-  //
-  //   // var dance = new MMD.Motion('motion/kishimen.vmd');
-  //   // dance.load(function() {
-  //   //   mmd.addModelMotion(miku, dance, true);
-  //   //
-  //   //   mmd.play()
-  //   //
-  //   //   setInterval(function() {
-  //   //     // console.log('fps = ' + mmd.realFps);
-  //   //   }, 1000);
-  //   // });
-  // });
 };

@@ -9,9 +9,9 @@ class this.MMD.Renderer
     @initTextures()
     @initMatrices()
 
-    # @drawSelfShadow = true
-    # @shadowMap = new MMD.ShadowMap(@mmd) if @drawSelfShadow
-    # @motionManager = new MMD.MotionManager
+    @motions = {}
+    @playing = false
+    @frame = -1
     return
 
   initVertices: ->
@@ -219,12 +219,41 @@ class this.MMD.Renderer
     return
 
   move: ->
-    @motionManager = @mmd.motionManager
+    # @motionManager = @mmd.motionManager
+    if not @playing or not @motionManager then return
+    if ++@frame > @motionManager.lastFrame
+      @frame = -1
+      @playing = false
+      return
+
+    # @moveCamera()
+    # @moveLight()
+
     @moveModel()
     return
 
+  # moveCamera: ->
+  #   camera = @motionManager.getCameraFrame(@frame)
+  #   if camera and not @ignoreCameraMotion
+  #     @distance = camera.distance
+  #     @rotx = camera.rotation[0]
+  #     @roty = camera.rotation[1]
+  #     @center = vec3.create(camera.location)
+  #     @fovy = camera.view_angle
+  #
+  #   return
+  #
+  # moveLight: ->
+  #   light = @motionManager.getLightFrame(@frame)
+  #   if light
+  #     @lightDirection = light.location
+  #     @lightColor = light.color
+  #
+  #   return
+
+
   moveModel: ->
-    {morphs, bones} = @mmd.motionManager.getModelFrame(@model, @mmd.frame)
+    {morphs, bones} = @motionManager.getModelFrame(@model, @frame)
 
     @moveMorphs(@model, morphs)
     @moveBones(@model, bones)
@@ -436,3 +465,15 @@ class this.MMD.Renderer
 
   rotate: (angle, x, y, z) ->
     mat4.rotate(@modelMatrix, angle, [x, y, z])
+
+  addModelMotion: (motionName, motion, merge_flag, frame_offset) ->
+    motionManager = new MMD.MotionManager
+    motionManager.addModelMotion(@model, motion, merge_flag, frame_offset)
+    # @mmd.motionManager.addModelMotion(@model, motion, merge_flag, frame_offset)
+    @motions[motionName] = motionManager
+
+  play: (motionName) ->
+    @playing = true
+    @motionManager = @motions[motionName]
+    if not @motion then console.err "#{motionName} not found in the motions"
+    @frame = -1

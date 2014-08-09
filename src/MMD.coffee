@@ -82,10 +82,8 @@ class this.MMD
     that = this
     for name, model of @models
       model.load ->
-        that.model_count--
-        # if all finishes
-        if that.model_count <= 0
-          # iterate and add all the models to the scene
+        if --that.model_count <= 0
+          # if all finishes, iterate and add all the models to the scene
           for k, m of that.models
             that.renderers[k] = new MMD.Renderer(that, m)
           callback()
@@ -122,35 +120,9 @@ class this.MMD
     return
 
   move: ->
-    if ++@frame > @motionManager.lastFrame
-      @pause()
-      @frame = -1
-      return
-
-    @moveCamera()
-    @moveLight()
-
     for key, renderer of @renderers
-      renderer.move()
-    return
-
-  moveCamera: ->
-    camera = @motionManager.getCameraFrame(@frame)
-    if camera and not @ignoreCameraMotion
-      @distance = camera.distance
-      @rotx = camera.rotation[0]
-      @roty = camera.rotation[1]
-      @center = vec3.create(camera.location)
-      @fovy = camera.view_angle
-
-    return
-
-  moveLight: ->
-    light = @motionManager.getLightFrame(@frame)
-    if light
-      @lightDirection = light.location
-      @lightColor = light.color
-
+      if renderer.playing
+        renderer.move()
     return
 
   computeMatrices: (modelMatrix) ->
@@ -168,8 +140,6 @@ class this.MMD
     @viewMatrix = mat4.lookAt(@cameraPosition, @center, up)
 
     @mvMatrix = mat4.createMultiply(@viewMatrix, modelMatrix)
-    # @mvMatrix = mat4.createMultiply(@viewMatrix, @modelMatrix)
-    # @mvMatrix = mat4.createMultiply(@mvMatrix, transformation)
 
     @pMatrix = mat4.perspective(@fovy, @width / @height, 0.1, 1000.0)
 
@@ -179,14 +149,14 @@ class this.MMD
     return
 
   render: ->
-    # return if not @redraw and not @playing
-    # @redraw = false
+    return if not @redraw and not @playing
+    @redraw = false
 
     @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
     @gl.viewport(0, 0, @width, @height)
     @gl.clear(@gl.COLOR_BUFFER_BIT | @gl.DEPTH_BUFFER_BIT)
 
-    @roty += Math.PI / 360
+    # @roty += Math.PI / 360
 
     for key, renderer of @renderers
       @mvPushMatrix()
@@ -397,17 +367,9 @@ class this.MMD
     @frame = -1
     return
 
-  addCameraLightMotion: (motion, merge_flag, frame_offset) ->
-    @motionManager.addCameraLightMotion(motion, merge_flag, frame_offset)
-    return
-
-  # addModelMotion: (model, motion, merge_flag, frame_offset) ->
-  #   @motionManager.addModelMotion(model, motion, merge_flag, frame_offset)
+  # addCameraLightMotion: (motion, merge_flag, frame_offset) ->
+  #   @motionManager.addCameraLightMotion(motion, merge_flag, frame_offset)
   #   return
-
-  addModelMotion: (modelName, motion, merge_flag, frame_offset) ->
-    @motionManager.addModelMotion(@getModelRenderer(modelName).model, motion, merge_flag, frame_offset)
-    return
 
   play: ->
     @playing = true
