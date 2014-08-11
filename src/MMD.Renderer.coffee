@@ -475,5 +475,5 @@ class this.MMD.Renderer
   play: (motionName) ->
     @playing = true
     @motionManager = @motions[motionName]
-    if not @motion then console.err "#{motionName} not found in the motions"
+    if not @motionManager then console.log "#{motionName} not found in the motions"
     @frame = -1

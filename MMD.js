@@ -2318,8 +2318,8 @@
     Renderer.prototype.play = function(motionName) {
       this.playing = true;
       this.motionManager = this.motions[motionName];
-      if (!this.motion) {
-        console.err("" + motionName + " not found in the motions");
+      if (!this.motionManager) {
+        console.log("" + motionName + " not found in the motions");
       }
       return this.frame = -1;
     };
