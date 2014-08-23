@@ -9,6 +9,10 @@ class this.MMD
     @renderers = {}
     @initMatrices()
 
+    @pmdProgram = @initShaders(MMD.PMDVertexShaderSource, MMD.PMDFragmentShaderSource)
+    @pmxProgram = @initShaders(MMD.PMXVertexShaderSource, MMD.PMXFragmentShaderSource)
+    @initParameters()
+
   # set up basic matrices
   initMatrices: ->
     @mvMatrixStack = []
@@ -25,35 +29,35 @@ class this.MMD
         throw "Invalid popMatrix!"
     @mvMatrix = @mvMatrixStack.pop()
 
-  initShaders: ->
+  initShaders: (vShaderSource, fShaderSource) ->
     vshader = @gl.createShader(@gl.VERTEX_SHADER)
-    @gl.shaderSource(vshader, MMD.VertexShaderSource)
+    @gl.shaderSource(vshader, vShaderSource)
     @gl.compileShader(vshader)
     if not @gl.getShaderParameter(vshader, @gl.COMPILE_STATUS)
       alert('Vertex shader compilation error')
       throw @gl.getShaderInfoLog(vshader)
 
     fshader = @gl.createShader(@gl.FRAGMENT_SHADER)
-    @gl.shaderSource(fshader, MMD.FragmentShaderSource)
+    @gl.shaderSource(fshader, fShaderSource)
     @gl.compileShader(fshader)
     if not @gl.getShaderParameter(fshader, @gl.COMPILE_STATUS)
       alert('Fragment shader compilation error')
       throw @gl.getShaderInfoLog(fshader)
 
-    @program = @gl.createProgram()
-    @gl.attachShader(@program, vshader)
-    @gl.attachShader(@program, fshader)
+    program = @gl.createProgram()
+    @gl.attachShader(program, vshader)
+    @gl.attachShader(program, fshader)
 
-    @gl.linkProgram(@program)
-    if not @gl.getProgramParameter(@program, @gl.LINK_STATUS)
+    @gl.linkProgram(program)
+    if not @gl.getProgramParameter(program, @gl.LINK_STATUS)
       alert('Shader linking error')
-      throw @gl.getProgramInfoLog(@program)
+      throw @gl.getProgramInfoLog(program)
 
-    @gl.useProgram(@program)
+    @gl.useProgram(program)
 
     attributes = []
     uniforms = []
-    for src in [MMD.VertexShaderSource, MMD.FragmentShaderSource]
+    for src in [vShaderSource, fShaderSource]
       for line in src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').split(';')
         type = line.match(/^\s*(uniform|attribute)\s+/)?[1]
         continue if not type
@@ -62,13 +66,14 @@ class this.MMD
         uniforms.push(name) if type is 'uniform' and name not in uniforms
 
     for name in attributes
-      @program[name] = @gl.getAttribLocation(@program, name)
-      @gl.enableVertexAttribArray(@program[name])
+      program[name] = @gl.getAttribLocation(program, name)
+      console.log "#{name}: #{program[name]} => #{@gl.getError()}"
+      @gl.enableVertexAttribArray(program[name])
 
     for name in uniforms
-      @program[name] = @gl.getUniformLocation(@program, name)
+      program[name] = @gl.getUniformLocation(program, name)
 
-    return
+    return program
 
   addModel: (name, model) ->
     @models[name] = model
@@ -161,7 +166,6 @@ class this.MMD
     for key, renderer of @renderers
       @mvPushMatrix()
       @computeMatrices(renderer.modelMatrix)
-      @setUniforms()
       renderer.render()
       @mvPopMatrix()
 
@@ -169,74 +173,90 @@ class this.MMD
     @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
     @gl.viewport(0, 0, @width, @height) # not needed on Windows Chrome but necessary on Mac Chrome
 
-    @computeMatrices(mat4.createIdentity())
-    @setUniforms()
-    @renderAxes()
+    # @computeMatrices(mat4.createIdentity())
+    # @setPMDUniforms()
+    # @renderAxes()
 
     @gl.flush()
     return
 
-  setUniforms: ->
-    @gl.uniform1f(@program.uEdgeThickness, @edgeThickness)
-    @gl.uniform3fv(@program.uEdgeColor, @edgeColor)
-    @gl.uniformMatrix4fv(@program.uMVMatrix, false, @mvMatrix)
-    @gl.uniformMatrix4fv(@program.uPMatrix, false, @pMatrix)
-    @gl.uniformMatrix4fv(@program.uNMatrix, false, @nMatrix)
+  setPMDUniforms: ->
+    @gl.useProgram(@pmdProgram)
+    @gl.uniform1f(@pmdProgram.uEdgeThickness, @edgeThickness)
+    @gl.uniform3fv(@pmdProgram.uEdgeColor, @edgeColor)
+    @gl.uniformMatrix4fv(@pmdProgram.uMVMatrix, false, @mvMatrix)
+    @gl.uniformMatrix4fv(@pmdProgram.uPMatrix, false, @pMatrix)
+    @gl.uniformMatrix4fv(@pmdProgram.uNMatrix, false, @nMatrix)
 
     # direction of light source defined in world space, then transformed to view space
     lightDirection = vec3.createNormalize(@lightDirection) # world space
     mat4.multiplyVec3(@nMatrix, lightDirection) # view space
-    @gl.uniform3fv(@program.uLightDirection, lightDirection)
+    @gl.uniform3fv(@pmdProgram.uLightDirection, lightDirection)
 
-    @gl.uniform3fv(@program.uLightColor, @lightColor)
+    @gl.uniform3fv(@pmdProgram.uLightColor, @lightColor)
     return
 
-  renderAxes: ->
+  setPMXUniforms: ->
+    @gl.useProgram(@pmxProgram)
+    # @gl.uniform1f(@pmxProgram.uEdgeThickness, @edgeThickness)
+    @gl.uniformMatrix4fv(@pmxProgram.uMVMatrix, false, @mvMatrix)
+    @gl.uniformMatrix4fv(@pmxProgram.uPMatrix, false, @pMatrix)
+    # @gl.uniformMatrix4fv(@pmxProgram.uNMatrix, false, @nMatrix)
 
-    axisBuffer = @gl.createBuffer()
-    @gl.bindBuffer(@gl.ARRAY_BUFFER, axisBuffer)
-    @gl.vertexAttribPointer(@program.aMultiPurposeVector, 3, @gl.FLOAT, false, 0, 0)
-    if @drawAxes
-      @gl.uniform1i(@program.uAxis, true)
-
-      for i in [0...3]
-        axis = [0, 0, 0, 0, 0, 0]
-        axis[i] = 65 # from [65, 0, 0] to [0, 0, 0] etc.
-        color = [0, 0, 0]
-        color[i] = 1
-        @gl.bufferData(@gl.ARRAY_BUFFER, new Float32Array(axis), @gl.STATIC_DRAW)
-        @gl.uniform3fv(@program.uAxisColor, color)
-        @gl.drawArrays(@gl.LINES, 0, 2)
-
-      axis = [
-        -50, 0, 0, 0, 0, 0 # negative x-axis (from [-50, 0, 0] to origin)
-        0, 0, -50, 0, 0, 0 # negative z-axis (from [0, 0, -50] to origin)
-      ]
-      for i in [-50..50] by 5
-        if i != 0
-          axis.push(
-            i,   0, -50,
-            i,   0, 50, # one line parallel to the x-axis
-            -50, 0, i,
-            50,  0, i   # one line parallel to the z-axis
-          )
-      color = [0.7, 0.7, 0.7]
-      @gl.bufferData(@gl.ARRAY_BUFFER, new Float32Array(axis), @gl.STATIC_DRAW)
-      @gl.uniform3fv(@program.uAxisColor, color)
-      @gl.drawArrays(@gl.LINES, 0, 84)
-
-      @gl.uniform1i(@program.uAxis, false)
-
-    # draw center point
-    if @drawCenterPoint
-      @gl.uniform1i(@program.uCenterPoint, true)
-      @gl.bufferData(@gl.ARRAY_BUFFER, new Float32Array(@center), @gl.STATIC_DRAW)
-      @gl.drawArrays(@gl.POINTS, 0, 1)
-      @gl.uniform1i(@program.uCenterPoint, false)
-
-    @gl.deleteBuffer(axisBuffer)
-    @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
+    # # direction of light source defined in world space, then transformed to view space
+    # lightDirection = vec3.createNormalize(@lightDirection) # world space
+    # mat4.multiplyVec3(@nMatrix, lightDirection) # view space
+    # @gl.uniform3fv(@pmxProgram.uLightDirection, lightDirection)
+    #
+    # @gl.uniform3fv(@pmxProgram.uLightColor, @lightColor)
     return
+
+  # renderAxes: ->
+  #
+  #   axisBuffer = @gl.createBuffer()
+  #   @gl.bindBuffer(@gl.ARRAY_BUFFER, axisBuffer)
+  #   @gl.vertexAttribPointer(@pmdProgram.aMultiPurposeVector, 3, @gl.FLOAT, false, 0, 0)
+  #   if @drawAxes
+  #     @gl.uniform1i(@pmdProgram.uAxis, true)
+  #
+  #     for i in [0...3]
+  #       axis = [0, 0, 0, 0, 0, 0]
+  #       axis[i] = 65 # from [65, 0, 0] to [0, 0, 0] etc.
+  #       color = [0, 0, 0]
+  #       color[i] = 1
+  #       @gl.bufferData(@gl.ARRAY_BUFFER, new Float32Array(axis), @gl.STATIC_DRAW)
+  #       @gl.uniform3fv(@pmdProgram.uAxisColor, color)
+  #       @gl.drawArrays(@gl.LINES, 0, 2)
+  #
+  #     axis = [
+  #       -50, 0, 0, 0, 0, 0 # negative x-axis (from [-50, 0, 0] to origin)
+  #       0, 0, -50, 0, 0, 0 # negative z-axis (from [0, 0, -50] to origin)
+  #     ]
+  #     for i in [-50..50] by 5
+  #       if i != 0
+  #         axis.push(
+  #           i,   0, -50,
+  #           i,   0, 50, # one line parallel to the x-axis
+  #           -50, 0, i,
+  #           50,  0, i   # one line parallel to the z-axis
+  #         )
+  #     color = [0.7, 0.7, 0.7]
+  #     @gl.bufferData(@gl.ARRAY_BUFFER, new Float32Array(axis), @gl.STATIC_DRAW)
+  #     @gl.uniform3fv(@pmdProgram.uAxisColor, color)
+  #     @gl.drawArrays(@gl.LINES, 0, 84)
+  #
+  #     @gl.uniform1i(@pmdProgram.uAxis, false)
+  #
+  #   # draw center point
+  #   if @drawCenterPoint
+  #     @gl.uniform1i(@pmdProgram.uCenterPoint, true)
+  #     @gl.bufferData(@gl.ARRAY_BUFFER, new Float32Array(@center), @gl.STATIC_DRAW)
+  #     @gl.drawArrays(@gl.POINTS, 0, 1)
+  #     @gl.uniform1i(@pmdProgram.uCenterPoint, false)
+  #
+  #   @gl.deleteBuffer(axisBuffer)
+  #   @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
+  #   return
 
   registerKeyListener: (element) ->
     element.addEventListener('keydown', (e) =>
