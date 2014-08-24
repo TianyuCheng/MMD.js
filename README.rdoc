@@ -4,7 +4,7 @@ MikuMikuDance player on WebGL.
 
 == Features
 
-- PMD (model) and VMD (motion) parsers
+- PMD (model), PMX (model) and VMD (motion) parsers
 - Shader that's almost compatible with MMD
 - Camera, light and morph animation
 
@@ -57,5 +57,5 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 Atsushi Takayama
 
-== Minor Modification by
+== Modified by
 Tianyu Cheng
