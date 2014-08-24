@@ -1,11 +1,12 @@
 window.onload = function() {
-  var size = 512
   var canvas = document.createElement('canvas');
-  canvas.width = size * 2;
-  canvas.height = size;
+  canvas.width = 720;
+  canvas.height = 480;
   canvas.style.border = 'solid black 1px';
 
   document.body.appendChild(canvas);
+
+  // testImage("model/Tda_Miku/body00_MikuAp.tga.png")
 
   var mmd = new MMD(canvas, canvas.width, canvas.height);
   mmd.registerKeyListener(document);
@@ -71,21 +72,20 @@ window.onload = function() {
   mmd.load(function() {
     var tda_miku = mmd.getModelRenderer("Tda_Miku");
     var miku = mmd.getModelRenderer("miku");
-
     miku.translate(0.0, 0.0, -10.0);
 
     mmd.start();
     mmd.play();
 
-    var kishimen = new MMD.Motion('motion/kishimen.vmd');
-    kishimen.load(function() {
-      miku.addModelMotion("kishimen", kishimen, true);
-
-      var mikukishimen = document.getElementById("dance");
-      mikukishimen.onclick = function() {
-        miku.play("kishimen");
-      }
-    });
+    // var kishimen = new MMD.Motion('motion/kishimen.vmd');
+    // kishimen.load(function() {
+    //   miku.addModelMotion("kishimen", kishimen, true);
+    //
+    //   var mikukishimen = document.getElementById("dance");
+    //   mikukishimen.onclick = function() {
+    //     miku.play("kishimen");
+    //   }
+    // });
   });
 
 

@@ -93,7 +93,7 @@ class this.MMD.PMDRenderer
   initTextures: ->
     model = @model
 
-    @textureManager = new MMD.TextureManager(this)
+    @textureManager = new MMD.TextureManager(@mmd)
     @textureManager.onload = => @redraw = true
 
     for material in model.materials
@@ -123,6 +123,7 @@ class this.MMD.PMDRenderer
   render: ->
     
     @mmd.setPMDUniforms()
+    @program = @mmd.pmdProgram
 
     for attribute, vb of @vbuffers
       @gl.bindBuffer(@gl.ARRAY_BUFFER, vb.buffer)
@@ -148,6 +149,7 @@ class this.MMD.PMDRenderer
 
     # @setSelfShadowTexture()
     # @setUniforms()
+    @gl.useProgram(null)
 
   renderMaterial: (material, offset) ->
     @gl.uniform3fv(@program.uAmbientColor, material.ambient)

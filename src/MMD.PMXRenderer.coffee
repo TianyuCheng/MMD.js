@@ -2,7 +2,6 @@ class this.MMD.PMXRenderer
 
   constructor: (@mmd, @model) ->
     @gl = @mmd.gl
-    @program = @mmd.pmxProgram
     @vbuffers = {}
     @initVertices()
     @initIndices()
@@ -36,9 +35,9 @@ class this.MMD.PMXRenderer
       uvs[2 * i + 1] = vertex.v
     
     for data in [
-      {attribute: 'aVertexPosition', array: positions, size: 3}
-      # {attribute: 'aVertexNormal', array: normals, size: 3},
-      # {attribute: 'aTextureCoord', array: uvs, size: 2}
+      {attribute: 'aVertexPosition', array: positions, size: 3},
+      {attribute: 'aVertexNormal', array: normals, size: 3},
+      {attribute: 'aTextureCoord', array: uvs, size: 2}
     ]
       buffer = @gl.createBuffer()
       @gl.bindBuffer(@gl.ARRAY_BUFFER, buffer)
@@ -58,10 +57,38 @@ class this.MMD.PMXRenderer
     return
 
   initTextures: ->
+    model = @model
+
+    @textureManager = new MMD.TextureManager(@mmd)
+    @textureManager.onload = => @redraw = true
+
+    for material in model.materials
+      material.textures = {} if not material.textures
+
+      toonIndex = material.toon_index
+      fileName = 'toon' + ('0' + (toonIndex + 1)).slice(-2) + '.bmp'
+      if toonIndex == -1 or # -1 is special (no shadow)
+        !model.toon_file_names or # no toon_file_names section in PMD
+        fileName == model.toon_file_names[toonIndex] # toonXX.bmp is in 'data' directory
+          fileName = 'data/' + fileName
+      else # otherwise the toon texture is in the model's directory
+        fileName = model.directory + '/' + model.toon_file_names[toonIndex]
+      material.textures.toon = @textureManager.get('toon', fileName)
+
+      if material.texture_file_name
+        for fileName in material.texture_file_name.split('*')
+          switch fileName.slice(-4)
+            when '.sph' then type = 'sph'
+            when '.spa' then type = 'spa'
+            when '.tga' then type = 'regular'; fileName += '.png'
+            else             type = 'regular'
+          material.textures[type] = @textureManager.get(type, model.directory + '/' + fileName)
+
     return
 
   render: ->
     @mmd.setPMXUniforms()
+    @program = @mmd.pmxProgram
 
     for attribute, vb of @vbuffers
       @gl.bindBuffer(@gl.ARRAY_BUFFER, vb.buffer)
@@ -69,16 +96,67 @@ class this.MMD.PMXRenderer
 
     @gl.bindBuffer(@gl.ELEMENT_ARRAY_BUFFER, @ibuffer)
 
-    if @model.vertex_index_size == 2
-        @gl.drawElements(@gl.TRIANGLES, @model.triangles.length, @gl.UNSIGNED_SHORT, 0)
-    else if @model.vertex_index_size == 4
-        @gl.drawElements(@gl.TRIANGLES, @model.triangles.length, @gl.UNSIGNED_INT, 0)
+    @gl.enable(@gl.CULL_FACE)
+    @gl.enable(@gl.BLEND)
+    @gl.blendFuncSeparate(@gl.SRC_ALPHA, @gl.ONE_MINUS_SRC_ALPHA, @gl.SRC_ALPHA, @gl.DST_ALPHA)
+
+    offset = 0
+    for material in @model.materials
+      @renderMaterial(material, offset)
+      offset += material.face_vert_count
+
+    @gl.disable(@gl.BLEND)
+
+    # @gl.drawElements(@gl.TRIANGLES, @model.triangles.length, @gl.UNSIGNED_SHORT, 0)
+
+    offset = 0
+    for material in @model.materials
+      @renderEdge(material, offset)
+      offset += material.face_vert_count
+    return
 
   renderMaterial: (material, offset) ->
-    # @gl.drawElements(@gl.TRIANGLES, material.face_vert_count, @gl.UNSIGNED_SHORT, offset * 2)
+    @gl.uniform3fv(@program.uAmbientColor, material.ambient)
+    @gl.uniform3fv(@program.uSpecularColor, material.specular)
+    @gl.uniform3fv(@program.uDiffuseColor, material.diffuse)
+    @gl.uniform1f(@program.uAlpha, material.alpha)
+    @gl.uniform1f(@program.uShininess, material.shininess)
+
+    textures = material.textures
+    @gl.activeTexture(@gl.TEXTURE0) # 0 -> toon
+    @gl.bindTexture(@gl.TEXTURE_2D, textures.toon)
+    @gl.uniform1i(@program.uToon, 0)
+
+    if textures.regular
+      @gl.activeTexture(@gl.TEXTURE1) # 1 -> regular texture
+      @gl.bindTexture(@gl.TEXTURE_2D, textures.regular)
+      @gl.uniform1i(@program.uTexture, 1)
+    @gl.uniform1i(@program.uUseTexture, !!textures.regular)
+
+    if textures.sph or textures.spa
+      @gl.activeTexture(@gl.TEXTURE2) # 2 -> sphere map texture
+      @gl.bindTexture(@gl.TEXTURE_2D, textures.sph || textures.spa)
+      @gl.uniform1i(@program.uSphereMap, 2)
+      @gl.uniform1i(@program.uUseSphereMap, true)
+      @gl.uniform1i(@program.uIsSphereMapAdditive, !!textures.spa)
+    else
+      @gl.uniform1i(@program.uUseSphereMap, false)
+
+    length = material.face_vert_count
+    # draw elements with proper size
+    switch @model.vertex_index_size
+      when 1    # unsigned byte
+        @gl.drawElements(@gl.TRIANGLES, length, @gl.UNSIGNED_BYTE, offset)
+      when 2    # unsigned short
+        @gl.drawElements(@gl.TRIANGLES, length, @gl.UNSIGNED_SHORT, offset * 2)
+      when 4    # unsigned int
+        @gl.drawElements(@gl.TRIANGLES, length, @gl.UNSIGNED_INT, offset * 4)
+      else
+        console.log "vertex index size not found #{@model.vertex_index_size}"
     return
 
   renderEdge: (material, offset) ->
+    # return if not @drawEdge or not material.edge_flag
     return
 
   move: ->
@@ -111,7 +189,7 @@ class this.MMD.PMXRenderer
     # @motions[motionName] = motionManager
 
   play: (motionName) ->
-    # @playing = true
+    @playing = true
     # @motionManager = @motions[motionName]
     # if not @motionManager then console.log "#{motionName} not found in the motions"
     # @frame = -1

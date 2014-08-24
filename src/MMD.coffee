@@ -9,8 +9,8 @@ class this.MMD
     @renderers = {}
     @initMatrices()
 
-    @pmdProgram = @initShaders(MMD.PMDVertexShaderSource, MMD.PMDFragmentShaderSource)
-    @pmxProgram = @initShaders(MMD.PMXVertexShaderSource, MMD.PMXFragmentShaderSource)
+    # @pmdProgram = @initShaders(MMD.PMDVertexShaderSource, MMD.PMDFragmentShaderSource)
+    # @pmxProgram = @initShaders(MMD.PMXVertexShaderSource, MMD.PMXFragmentShaderSource)
     @initParameters()
 
   # set up basic matrices
@@ -64,11 +64,12 @@ class this.MMD
         name = line.match(/(\w+)(\[\d+\])?\s*$/)[1]
         attributes.push(name) if type is 'attribute' and name not in attributes
         uniforms.push(name) if type is 'uniform' and name not in uniforms
-
+        
+    console.log "==============="
     for name in attributes
       program[name] = @gl.getAttribLocation(program, name)
-      console.log "#{name}: #{program[name]} => #{@gl.getError()}"
       @gl.enableVertexAttribArray(program[name])
+      console.log "#{name}: #{program[name]} => #{@gl.getError()}"
 
     for name in uniforms
       program[name] = @gl.getUniformLocation(program, name)
@@ -161,18 +162,16 @@ class this.MMD
     @gl.viewport(0, 0, @width, @height)
     @gl.clear(@gl.COLOR_BUFFER_BIT | @gl.DEPTH_BUFFER_BIT)
 
-    # @roty += Math.PI / 360
-
     for key, renderer of @renderers
       @mvPushMatrix()
       @computeMatrices(renderer.modelMatrix)
       renderer.render()
       @mvPopMatrix()
 
-    # reset
-    @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
-    @gl.viewport(0, 0, @width, @height) # not needed on Windows Chrome but necessary on Mac Chrome
-
+    # # reset
+    # @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
+    # @gl.viewport(0, 0, @width, @height) # not needed on Windows Chrome but necessary on Mac Chrome
+    #
     # @computeMatrices(mat4.createIdentity())
     # @setPMDUniforms()
     # @renderAxes()
@@ -181,6 +180,8 @@ class this.MMD
     return
 
   setPMDUniforms: ->
+    if not @pmdProgram?
+      @pmdProgram = @initShaders(MMD.PMDVertexShaderSource, MMD.PMDFragmentShaderSource)
     @gl.useProgram(@pmdProgram)
     @gl.uniform1f(@pmdProgram.uEdgeThickness, @edgeThickness)
     @gl.uniform3fv(@pmdProgram.uEdgeColor, @edgeColor)
@@ -197,18 +198,21 @@ class this.MMD
     return
 
   setPMXUniforms: ->
+    if not @pmxProgram?
+      @pmxProgram = @initShaders(MMD.PMXVertexShaderSource, MMD.PMXFragmentShaderSource)
+      console.log @pmxProgram
     @gl.useProgram(@pmxProgram)
     # @gl.uniform1f(@pmxProgram.uEdgeThickness, @edgeThickness)
     @gl.uniformMatrix4fv(@pmxProgram.uMVMatrix, false, @mvMatrix)
     @gl.uniformMatrix4fv(@pmxProgram.uPMatrix, false, @pMatrix)
-    # @gl.uniformMatrix4fv(@pmxProgram.uNMatrix, false, @nMatrix)
+    @gl.uniformMatrix4fv(@pmxProgram.uNMatrix, false, @nMatrix)
 
-    # # direction of light source defined in world space, then transformed to view space
-    # lightDirection = vec3.createNormalize(@lightDirection) # world space
-    # mat4.multiplyVec3(@nMatrix, lightDirection) # view space
-    # @gl.uniform3fv(@pmxProgram.uLightDirection, lightDirection)
-    #
-    # @gl.uniform3fv(@pmxProgram.uLightColor, @lightColor)
+    # direction of light source defined in world space, then transformed to view space
+    lightDirection = vec3.createNormalize(@lightDirection) # world space
+    mat4.multiplyVec3(@nMatrix, lightDirection) # view space
+    @gl.uniform3fv(@pmxProgram.uLightDirection, lightDirection)
+
+    @gl.uniform3fv(@pmxProgram.uLightColor, @lightColor)
     return
 
   # renderAxes: ->

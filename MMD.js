@@ -16,8 +16,6 @@
       this.models = {};
       this.renderers = {};
       this.initMatrices();
-      this.pmdProgram = this.initShaders(MMD.PMDVertexShaderSource, MMD.PMDFragmentShaderSource);
-      this.pmxProgram = this.initShaders(MMD.PMXVertexShaderSource, MMD.PMXFragmentShaderSource);
       this.initParameters();
     }
 
@@ -87,11 +85,12 @@
           }
         }
       }
+      console.log("===============");
       for (_k = 0, _len2 = attributes.length; _k < _len2; _k++) {
         name = attributes[_k];
         program[name] = this.gl.getAttribLocation(program, name);
-        console.log("" + name + ": " + program[name] + " => " + (this.gl.getError()));
         this.gl.enableVertexAttribArray(program[name]);
+        console.log("" + name + ": " + program[name] + " => " + (this.gl.getError()));
       }
       for (_l = 0, _len3 = uniforms.length; _l < _len3; _l++) {
         name = uniforms[_l];
@@ -201,13 +200,14 @@
         renderer.render();
         this.mvPopMatrix();
       }
-      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-      this.gl.viewport(0, 0, this.width, this.height);
       this.gl.flush();
     };
 
     MMD.prototype.setPMDUniforms = function() {
       var lightDirection;
+      if (this.pmdProgram == null) {
+        this.pmdProgram = this.initShaders(MMD.PMDVertexShaderSource, MMD.PMDFragmentShaderSource);
+      }
       this.gl.useProgram(this.pmdProgram);
       this.gl.uniform1f(this.pmdProgram.uEdgeThickness, this.edgeThickness);
       this.gl.uniform3fv(this.pmdProgram.uEdgeColor, this.edgeColor);
@@ -221,9 +221,19 @@
     };
 
     MMD.prototype.setPMXUniforms = function() {
+      var lightDirection;
+      if (this.pmxProgram == null) {
+        this.pmxProgram = this.initShaders(MMD.PMXVertexShaderSource, MMD.PMXFragmentShaderSource);
+        console.log(this.pmxProgram);
+      }
       this.gl.useProgram(this.pmxProgram);
       this.gl.uniformMatrix4fv(this.pmxProgram.uMVMatrix, false, this.mvMatrix);
       this.gl.uniformMatrix4fv(this.pmxProgram.uPMatrix, false, this.pMatrix);
+      this.gl.uniformMatrix4fv(this.pmxProgram.uNMatrix, false, this.nMatrix);
+      lightDirection = vec3.createNormalize(this.lightDirection);
+      mat4.multiplyVec3(this.nMatrix, lightDirection);
+      this.gl.uniform3fv(this.pmxProgram.uLightDirection, lightDirection);
+      this.gl.uniform3fv(this.pmxProgram.uLightColor, this.lightColor);
     };
 
     MMD.prototype.registerKeyListener = function(element) {
@@ -1895,7 +1905,7 @@
     PMDRenderer.prototype.initTextures = function() {
       var fileName, material, model, toonIndex, type, _i, _j, _len, _len1, _ref, _ref1;
       model = this.model;
-      this.textureManager = new MMD.TextureManager(this);
+      this.textureManager = new MMD.TextureManager(this.mmd);
       this.textureManager.onload = (function(_this) {
         return function() {
           return _this.redraw = true;
@@ -1940,8 +1950,9 @@
     };
 
     PMDRenderer.prototype.render = function() {
-      var attribute, material, offset, vb, _i, _j, _len, _len1, _ref, _ref1, _ref2, _results;
+      var attribute, material, offset, vb, _i, _j, _len, _len1, _ref, _ref1, _ref2;
       this.mmd.setPMDUniforms();
+      this.program = this.mmd.pmdProgram;
       _ref = this.vbuffers;
       for (attribute in _ref) {
         vb = _ref[attribute];
@@ -1962,13 +1973,12 @@
       this.gl.disable(this.gl.BLEND);
       offset = 0;
       _ref2 = this.model.materials;
-      _results = [];
       for (_j = 0, _len1 = _ref2.length; _j < _len1; _j++) {
         material = _ref2[_j];
         this.renderEdge(material, offset);
-        _results.push(offset += material.face_vert_count);
+        offset += material.face_vert_count;
       }
-      return _results;
+      return this.gl.useProgram(null);
     };
 
     PMDRenderer.prototype.renderMaterial = function(material, offset) {
@@ -2325,7 +2335,7 @@
 
   MMD.PMDVertexShaderSource = '\nuniform mat4 uMVMatrix; // model-view matrix (model -> view space)\nuniform mat4 uPMatrix; // projection matrix (view -> projection space)\nuniform mat4 uNMatrix; // normal matrix (inverse of transpose of model-view matrix)\n\nuniform mat4 uLightMatrix; // mvpdMatrix of light space (model -> display space)\n\nattribute vec3 aVertexNormal;\nattribute vec2 aTextureCoord;\nattribute float aVertexEdge; // 0 or 1. 1 if the vertex has an edge. (becuase we can\'t pass bool to attributes)\n\nattribute float aBoneWeight;\nattribute vec3 aVectorFromBone1;\nattribute vec3 aVectorFromBone2;\nattribute vec4 aBone1Rotation;\nattribute vec4 aBone2Rotation;\nattribute vec3 aBone1Position;\nattribute vec3 aBone2Position;\n\nattribute vec3 aMultiPurposeVector;\n\nvarying vec3 vPosition;\nvarying vec3 vNormal;\nvarying vec2 vTextureCoord;\nvarying vec4 vLightCoord; // coordinate in light space; to be mapped onto shadow map\n\nuniform float uEdgeThickness;\nuniform bool uEdge;\n\nuniform bool uGenerateShadowMap;\n\nuniform bool uSelfShadow;\n\nuniform bool uAxis;\nuniform bool uCenterPoint;\n\nvec3 qtransform(vec4 q, vec3 v) {\n  return v + 2.0 * cross(cross(v, q.xyz) - q.w*v, q.xyz);\n}\n\nvoid main() {\n  vec3 position;\n  vec3 normal;\n\n  if (uAxis || uCenterPoint) {\n\n    position = aMultiPurposeVector;\n\n  } else {\n\n    float weight = aBoneWeight;\n    vec3 morph = aMultiPurposeVector;\n\n    position = qtransform(aBone1Rotation, aVectorFromBone1 + morph) + aBone1Position;\n    normal = qtransform(aBone1Rotation, aVertexNormal);\n\n    if (weight < 0.99) {\n      vec3 p2 = qtransform(aBone2Rotation, aVectorFromBone2 + morph) + aBone2Position;\n      vec3 n2 = qtransform(aBone2Rotation, normal);\n\n      position = mix(p2, position, weight);\n      normal = normalize(mix(n2, normal, weight));\n    }\n  }\n\n  // return vertex point in projection space\n  gl_Position = uPMatrix * uMVMatrix * vec4(position, 1.0);\n\n  if (uCenterPoint) {\n    gl_Position.z = 0.0; // always on top\n    gl_PointSize = 16.0;\n  }\n\n  if (uGenerateShadowMap || uAxis || uCenterPoint) return;\n\n  // for fragment shader\n  vTextureCoord = aTextureCoord;\n  vPosition = (uMVMatrix * vec4(position, 1.0)).xyz;\n  vNormal = (uNMatrix * vec4(normal, 1.0)).xyz;\n\n  if (uSelfShadow) {\n    vLightCoord = uLightMatrix * vec4(position, 1.0);\n  }\n\n  if (uEdge) {\n    vec4 pos = gl_Position;\n    vec4 pos2 = uPMatrix * uMVMatrix * vec4(position + normal, 1.0);\n    vec4 norm = normalize(pos2 - pos);\n    gl_Position = pos + norm * uEdgeThickness * aVertexEdge * pos.w; // scale by pos.w to prevent becoming thicker when zoomed\n    return;\n  }\n}\n';
 
-  MMD.PMXFragmentShaderSource = '\n#ifdef GL_ES\nprecision highp float;\n#endif\n\nvoid main() {\n  vec3 color = vec3(1.0, 0.0, 0.0);\n  gl_FragColor = vec4(color, 1.0);\n}\n';
+  MMD.PMXFragmentShaderSource = '\n#ifdef GL_ES\nprecision highp float;\n#endif\n \nvarying vec2 vTextureCoord;\nvarying vec3 vPosition;\nvarying vec3 vNormal;\n// varying vec4 vLightCoord;\n\nuniform vec3 uLightDirection; // light source direction in world space\nuniform vec3 uLightColor;\n\nuniform vec3 uAmbientColor;\nuniform vec3 uSpecularColor;\nuniform vec3 uDiffuseColor;\nuniform float uAlpha;\nuniform float uShininess;\n\nuniform bool uUseTexture;\nuniform bool uUseSphereMap;\nuniform bool uIsSphereMapAdditive;\n\nuniform sampler2D uToon;\nuniform sampler2D uTexture;\nuniform sampler2D uSphereMap;\n\nvoid main() {\n  vec3 color;\n  float alpha = uAlpha;\n\n  // vectors are in view space\n  vec3 norm = normalize(vNormal); // each point\'s normal vector in view space\n  vec3 cameraDirection = normalize(-vPosition); // camera located at origin in view space\n\n  color = vec3(1.0, 1.0, 1.0);\n  if (uUseTexture) {\n    vec4 texColor = texture2D(uTexture, vTextureCoord);\n    color *= texColor.rgb;\n    alpha *= texColor.a;\n  }\n\n  if (uUseSphereMap) {\n    vec2 sphereCoord = 0.5 * (1.0 + vec2(1.0, -1.0) * norm.xy);\n    if (uIsSphereMapAdditive) {\n      color += texture2D(uSphereMap, sphereCoord).rgb;\n    } else {\n      color *= texture2D(uSphereMap, sphereCoord).rgb;\n    }\n  }\n\n  // specular component\n  // vec3 halfAngle = normalize(uLightDirection/* + cameraDirection*/);\n  // float specularWeight = pow( max(0.001, dot(halfAngle, norm)) , uShininess );\n  // //float specularWeight = pow( max(0.0, dot(reflect(-uLightDirection, norm), cameraDirection)) , uShininess ); // another definition\n  // vec3 specular = specularWeight * uSpecularColor;\n\n  // vec2 toonCoord = vec2(0.0, 0.5 * (1.0 - dot( uLightDirection, norm )));\n\n  color *= uAmbientColor + uLightColor * (uDiffuseColor/* + specular*/);\n  color = clamp(color, 0.0, 1.0);\n\n  gl_FragColor = vec4(color, alpha);\n}\n';
 
   size_Int8 = Int8Array.BYTES_PER_ELEMENT;
 
@@ -2773,7 +2783,7 @@
       len = view.getUint32(offset, true);
       this.memo = view.getString(offset + size_Uint32, len, model.utf8Encoding);
       offset += size_Uint32 + size_Uint8 * len;
-      this.refs_vertex = view.getUint32(offset, true);
+      this.face_vert_count = view.getUint32(offset, true);
       offset += size_Uint32;
       this.size = offset - _offset;
     }
@@ -3077,7 +3087,6 @@
       this.mmd = mmd;
       this.model = model;
       this.gl = this.mmd.gl;
-      this.program = this.mmd.pmxProgram;
       this.vbuffers = {};
       this.initVertices();
       this.initIndices();
@@ -3112,6 +3121,14 @@
           attribute: 'aVertexPosition',
           array: positions,
           size: 3
+        }, {
+          attribute: 'aVertexNormal',
+          array: normals,
+          size: 3
+        }, {
+          attribute: 'aTextureCoord',
+          array: uvs,
+          size: 2
         }
       ];
       for (_j = 0, _len = _ref.length; _j < _len; _j++) {
@@ -3136,11 +3153,57 @@
       this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, null);
     };
 
-    PMXRenderer.prototype.initTextures = function() {};
+    PMXRenderer.prototype.initTextures = function() {
+      var fileName, material, model, toonIndex, type, _i, _j, _len, _len1, _ref, _ref1;
+      model = this.model;
+      this.textureManager = new MMD.TextureManager(this.mmd);
+      this.textureManager.onload = (function(_this) {
+        return function() {
+          return _this.redraw = true;
+        };
+      })(this);
+      _ref = model.materials;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        material = _ref[_i];
+        if (!material.textures) {
+          material.textures = {};
+        }
+        toonIndex = material.toon_index;
+        fileName = 'toon' + ('0' + (toonIndex + 1)).slice(-2) + '.bmp';
+        if (toonIndex === -1 || !model.toon_file_names || fileName === model.toon_file_names[toonIndex]) {
+          fileName = 'data/' + fileName;
+        } else {
+          fileName = model.directory + '/' + model.toon_file_names[toonIndex];
+        }
+        material.textures.toon = this.textureManager.get('toon', fileName);
+        if (material.texture_file_name) {
+          _ref1 = material.texture_file_name.split('*');
+          for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+            fileName = _ref1[_j];
+            switch (fileName.slice(-4)) {
+              case '.sph':
+                type = 'sph';
+                break;
+              case '.spa':
+                type = 'spa';
+                break;
+              case '.tga':
+                type = 'regular';
+                fileName += '.png';
+                break;
+              default:
+                type = 'regular';
+            }
+            material.textures[type] = this.textureManager.get(type, model.directory + '/' + fileName);
+          }
+        }
+      }
+    };
 
     PMXRenderer.prototype.render = function() {
-      var attribute, vb, _ref;
+      var attribute, material, offset, vb, _i, _j, _len, _len1, _ref, _ref1, _ref2;
       this.mmd.setPMXUniforms();
+      this.program = this.mmd.pmxProgram;
       _ref = this.vbuffers;
       for (attribute in _ref) {
         vb = _ref[attribute];
@@ -3148,14 +3211,67 @@
         this.gl.vertexAttribPointer(this.program[attribute], vb.size, this.gl.FLOAT, false, 0, 0);
       }
       this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.ibuffer);
-      if (this.model.vertex_index_size === 2) {
-        return this.gl.drawElements(this.gl.TRIANGLES, this.model.triangles.length, this.gl.UNSIGNED_SHORT, 0);
-      } else if (this.model.vertex_index_size === 4) {
-        return this.gl.drawElements(this.gl.TRIANGLES, this.model.triangles.length, this.gl.UNSIGNED_INT, 0);
+      this.gl.enable(this.gl.CULL_FACE);
+      this.gl.enable(this.gl.BLEND);
+      this.gl.blendFuncSeparate(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA, this.gl.SRC_ALPHA, this.gl.DST_ALPHA);
+      offset = 0;
+      _ref1 = this.model.materials;
+      for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+        material = _ref1[_i];
+        this.renderMaterial(material, offset);
+        offset += material.face_vert_count;
+      }
+      this.gl.disable(this.gl.BLEND);
+      offset = 0;
+      _ref2 = this.model.materials;
+      for (_j = 0, _len1 = _ref2.length; _j < _len1; _j++) {
+        material = _ref2[_j];
+        this.renderEdge(material, offset);
+        offset += material.face_vert_count;
       }
     };
 
-    PMXRenderer.prototype.renderMaterial = function(material, offset) {};
+    PMXRenderer.prototype.renderMaterial = function(material, offset) {
+      var length, textures;
+      this.gl.uniform3fv(this.program.uAmbientColor, material.ambient);
+      this.gl.uniform3fv(this.program.uSpecularColor, material.specular);
+      this.gl.uniform3fv(this.program.uDiffuseColor, material.diffuse);
+      this.gl.uniform1f(this.program.uAlpha, material.alpha);
+      this.gl.uniform1f(this.program.uShininess, material.shininess);
+      textures = material.textures;
+      this.gl.activeTexture(this.gl.TEXTURE0);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, textures.toon);
+      this.gl.uniform1i(this.program.uToon, 0);
+      if (textures.regular) {
+        this.gl.activeTexture(this.gl.TEXTURE1);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, textures.regular);
+        this.gl.uniform1i(this.program.uTexture, 1);
+      }
+      this.gl.uniform1i(this.program.uUseTexture, !!textures.regular);
+      if (textures.sph || textures.spa) {
+        this.gl.activeTexture(this.gl.TEXTURE2);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, textures.sph || textures.spa);
+        this.gl.uniform1i(this.program.uSphereMap, 2);
+        this.gl.uniform1i(this.program.uUseSphereMap, true);
+        this.gl.uniform1i(this.program.uIsSphereMapAdditive, !!textures.spa);
+      } else {
+        this.gl.uniform1i(this.program.uUseSphereMap, false);
+      }
+      length = material.face_vert_count;
+      switch (this.model.vertex_index_size) {
+        case 1:
+          this.gl.drawElements(this.gl.TRIANGLES, length, this.gl.UNSIGNED_BYTE, offset);
+          break;
+        case 2:
+          this.gl.drawElements(this.gl.TRIANGLES, length, this.gl.UNSIGNED_SHORT, offset * 2);
+          break;
+        case 4:
+          this.gl.drawElements(this.gl.TRIANGLES, length, this.gl.UNSIGNED_INT, offset * 4);
+          break;
+        default:
+          console.log("vertex index size not found " + this.model.vertex_index_size);
+      }
+    };
 
     PMXRenderer.prototype.renderEdge = function(material, offset) {};
 
@@ -3185,13 +3301,15 @@
 
     PMXRenderer.prototype.addModelMotion = function(motionName, motion, merge_flag, frame_offset) {};
 
-    PMXRenderer.prototype.play = function(motionName) {};
+    PMXRenderer.prototype.play = function(motionName) {
+      return this.playing = true;
+    };
 
     return PMXRenderer;
 
   })();
 
-  MMD.PMXVertexShaderSource = '\nuniform mat4 uMVMatrix; // model-view matrix (model -> view space)\nuniform mat4 uPMatrix; // projection matrix (view -> projection space)\nuniform mat4 uNMatrix; // normal matrix (inverse of transpose of model-view matrix)\n\nuniform mat4 uLightMatrix; // mvpdMatrix of light space (model -> display space)\n\nattribute vec3 aVertexPosition;\n\nvec3 qtransform(vec4 q, vec3 v) {\n  return v + 2.0 * cross(cross(v, q.xyz) - q.w*v, q.xyz);\n}\n\nvoid main() {\n  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n}\n';
+  MMD.PMXVertexShaderSource = '\nuniform mat4 uMVMatrix; // model-view matrix (model -> view space)\nuniform mat4 uPMatrix; // projection matrix (view -> projection space)\nuniform mat4 uNMatrix; // normal matrix (inverse of transpose of model-view matrix)\n\nattribute vec3 aVertexPosition;\nattribute vec3 aVertexNormal;\nattribute vec2 aTextureCoord;\n\nvarying vec2 vTextureCoord;\nvarying vec3 vPosition;\nvarying vec3 vNormal;\n\nvec3 qtransform(vec4 q, vec3 v) {\n  return v + 2.0 * cross(cross(v, q.xyz) - q.w*v, q.xyz);\n}\n\nvoid main() {\n  vec3 position = aVertexPosition;\n  vec3 normal = aVertexNormal;\n\n  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);\n\n  // for fragment shader\n  vTextureCoord = aTextureCoord;\n  vPosition = (uMVMatrix * vec4(position, 1.0)).xyz;\n  vNormal = (uNMatrix * vec4(normal, 1.0)).xyz;\n}\n';
 
   MMD.ShadowMap = (function() {
     function ShadowMap(mmd) {

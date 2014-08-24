@@ -362,7 +362,7 @@ class PMXMaterial
     # console.log @memo
 
     # from face number, 3 times the face number
-    @refs_vertex = view.getUint32(offset, true)
+    @face_vert_count = view.getUint32(offset, true)
     offset += size_Uint32
 
     @size = offset - _offset
