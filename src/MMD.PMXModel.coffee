@@ -352,9 +352,9 @@ class PMXMaterial
     # If Toon Flag is 1, the size is 1 byte with a value from 0-9.
     @toon_flag = view.getUint8(offset); offset += size_Uint8
     if Boolean(@toon_flag)
-      @toon = view.getUint8(offset); offset += size_Uint8
+      @toon_index = view.getUint8(offset); offset += size_Uint8
     else
-      @toon = view.getBySize(offset, model.material_index_size, true); offset += model.material_index_size
+      @toon_index = view.getBySize(offset, model.material_index_size, true); offset += model.material_index_size
 
     len = view.getUint32(offset, true)
     @memo = view.getString(offset + size_Uint32, len, model.utf8Encoding)
@@ -381,7 +381,7 @@ class PMXBone
     # console.log "english name: #{@english_name}"
 
     # position
-    @position = new Float32Array([
+    @head_pos = new Float32Array([
       view.getFloat32(offset, true),
       view.getFloat32(offset + size_Float32, true),
       view.getFloat32(offset + size_Float32 * 2, true)

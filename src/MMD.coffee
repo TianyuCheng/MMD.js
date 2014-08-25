@@ -1,6 +1,7 @@
 class this.MMD
   constructor: (canvas, @width, @height) ->
     @gl = canvas.getContext('webgl') or canvas.getContext('experimental-webgl')
+    # @gl = WebGLDebugUtils.makeDebugContext(canvas.getContext("webgl") or canvas.getContext('experimental-webgl'))
     if not @gl
       alert('WebGL not supported in your browser')
       throw 'WebGL not supported'
@@ -12,6 +13,8 @@ class this.MMD
     # @pmdProgram = @initShaders(MMD.PMDVertexShaderSource, MMD.PMDFragmentShaderSource)
     # @pmxProgram = @initShaders(MMD.PMXVertexShaderSource, MMD.PMXFragmentShaderSource)
     @initParameters()
+    # maxVSattribs = @gl.getParameter(@gl.MAX_VERTEX_ATTRIBS)
+    # console.log maxVSattribs
 
   # set up basic matrices
   initMatrices: ->
@@ -366,7 +369,7 @@ class this.MMD
     # camera/view settings
     @ignoreCameraMotion = false
     @rotx = @roty = 0
-    @distance = @DIST = 70
+    @distance = @DIST = 35
     @center = [0, 10, 0]
     @fovy = 40
 

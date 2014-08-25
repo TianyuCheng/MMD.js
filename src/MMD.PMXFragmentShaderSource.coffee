@@ -1,8 +1,6 @@
 MMD.PMXFragmentShaderSource = '''
 
-  #ifdef GL_ES
-  precision highp float;
-  #endif
+  precision mediump float;
    
   varying vec2 vTextureCoord;
   varying vec3 vPosition;

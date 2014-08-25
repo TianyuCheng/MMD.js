@@ -12,7 +12,7 @@ window.onload = function() {
   mmd.registerKeyListener(document);
   mmd.registerMouseListener(document);
 
-  mmd.addModel("miku", new MMD.Model('model', 'Miku_Hatsune_metal.pmd'));
+  // mmd.addModel("miku", new MMD.Model('model', 'Miku_Hatsune_metal.pmd'));
   // mmd.addModel("rin",  new MMD.Model('model', 'Rin_Kagamene_act2.pmd'));
   // mmd.addModel("len",  new MMD.Model('model', 'Len_Kagamine.pmd'));
   mmd.addModel("Tda_Miku", new MMD.Model('model/Tda_Miku', 'Tda_Miku.pmx'));
@@ -71,8 +71,8 @@ window.onload = function() {
 
   mmd.load(function() {
     var tda_miku = mmd.getModelRenderer("Tda_Miku");
-    var miku = mmd.getModelRenderer("miku");
-    miku.translate(0.0, 0.0, -10.0);
+    // var miku = mmd.getModelRenderer("miku");
+    // miku.translate(0.0, 0.0, -10.0);
 
     mmd.start();
     mmd.play();
@@ -86,6 +86,13 @@ window.onload = function() {
     //     miku.play("kishimen");
     //   }
     // });
+    
+    var motion = new MMD.Motion('motion/tda_miku.vmd');
+    motion.load(function() {
+      tda_miku.addModelMotion("motion", motion);
+      tda_miku.play("motion");
+    });
+
   });
 
 

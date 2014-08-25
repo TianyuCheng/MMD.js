@@ -223,7 +223,6 @@ class this.MMD.PMDRenderer
     return
 
   move: ->
-    # @motionManager = @mmd.motionManager
     if not @playing or not @motionManager then return
     if ++@frame > @motionManager.lastFrame
       @frame = -1
