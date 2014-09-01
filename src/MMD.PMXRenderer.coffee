@@ -19,6 +19,10 @@ class this.MMD.PMXRenderer
     length = model.vertices.length
     weightTypes = new Float32Array(length)
     weights = new Float32Array(length * 4)
+    vectors1 = new Float32Array(length * 3)
+    vectors2 = new Float32Array(length * 3)
+    vectors3 = new Float32Array(length * 3)
+    vectors4 = new Float32Array(length * 3)
     positions1 = new Float32Array(length * 3)
     positions2 = new Float32Array(length * 3)
     positions3 = new Float32Array(length * 3)
@@ -42,6 +46,9 @@ class this.MMD.PMXRenderer
       if vertex.weight_type >= 0
         bone1 = model.bones[vertex.bone_num1]
         rotations1[4 * i + 3] = 1
+        vectors1[3 * i    ] = vertex.x - bone1.head_pos[0]
+        vectors1[3 * i + 1] = vertex.y - bone1.head_pos[1]
+        vectors1[3 * i + 2] = vertex.z - bone1.head_pos[2]
         positions1[3 * i    ] = bone1.head_pos[0]
         positions1[3 * i + 1] = bone1.head_pos[1]
         positions1[3 * i + 2] = bone1.head_pos[2]
@@ -49,6 +56,9 @@ class this.MMD.PMXRenderer
       if vertex.weight_type >= 1
         bone2 = model.bones[vertex.bone_num2]
         rotations2[4 * i + 3] = 1
+        vectors2[3 * i    ] = vertex.x - bone2.head_pos[0]
+        vectors2[3 * i + 1] = vertex.y - bone2.head_pos[1]
+        vectors2[3 * i + 2] = vertex.z - bone2.head_pos[2]
         positions2[3 * i    ] = bone2.head_pos[0]
         positions2[3 * i + 1] = bone2.head_pos[1]
         positions2[3 * i + 2] = bone2.head_pos[2]
@@ -59,6 +69,12 @@ class this.MMD.PMXRenderer
         bone4 = model.bones[vertex.bone_num4]
         rotations3[4 * i + 3] = 1
         rotations4[4 * i + 3] = 1
+        vectors3[3 * i    ] = vertex.x - bone3.head_pos[0]
+        vectors3[3 * i + 1] = vertex.y - bone3.head_pos[1]
+        vectors3[3 * i + 2] = vertex.z - bone3.head_pos[2]
+        vectors4[3 * i    ] = vertex.x - bone4.head_pos[0]
+        vectors4[3 * i + 1] = vertex.y - bone4.head_pos[1]
+        vectors4[3 * i + 2] = vertex.z - bone4.head_pos[2]
         positions3[3 * i    ] = bone3.head_pos[0]
         positions3[3 * i + 1] = bone3.head_pos[1]
         positions3[3 * i + 2] = bone3.head_pos[2]
@@ -93,12 +109,20 @@ class this.MMD.PMXRenderer
     model.rotations2 = rotations2
     model.rotations3 = rotations3
     model.rotations4 = rotations4
+    model.positions1 = positions1
+    model.positions2 = positions2
+    model.positions3 = positions3
+    model.positions4 = positions4
     model.morphVec = morphVec
     
     for data in [
-      {attribute: 'aMultiPurposeVector', array: morphVec, size: 3},
+      # {attribute: 'aMultiPurposeVector', array: morphVec, size: 3},
       {attribute: 'aWeightType', array: weightTypes, size: 1},
       {attribute: 'aBoneWeights', array: weights, size: 4},
+      {attribute: 'aVectorFromBone1', array: vectors1, size: 3},
+      {attribute: 'aVectorFromBone2', array: vectors2, size: 3},
+      {attribute: 'aVectorFromBone3', array: vectors3, size: 3},
+      {attribute: 'aVectorFromBone4', array: vectors4, size: 3},
       {attribute: 'aBone1Position', array: positions1, size: 3},
       {attribute: 'aBone2Position', array: positions2, size: 3},
       {attribute: 'aBone3Position', array: positions3, size: 3},
@@ -185,8 +209,6 @@ class this.MMD.PMXRenderer
 
     @gl.disable(@gl.BLEND)
 
-    # @gl.drawElements(@gl.TRIANGLES, @model.triangles.length, @gl.UNSIGNED_SHORT, 0)
-
     offset = 0
     for material in @model.materials
       @renderEdge(material, offset)
@@ -244,6 +266,8 @@ class this.MMD.PMXRenderer
       @playing = false
       return
 
+    # @frame = 0
+
     # @moveCamera()
     # @moveLight()
 
@@ -277,7 +301,33 @@ class this.MMD.PMXRenderer
     return
 
   moveMorphs: (model, morphs) ->
-    # not implemented
+    return if not morphs
+    return if model.morphs.length == 0
+
+    # for morph, j in model.morphs
+    #   if j == 0
+    #     base = morph
+    #     continue
+    #   continue if morph.name not of morphs
+    #   weight = morphs[morph.name]
+    #   for vert in morph.vert_data
+    #     b = base.vert_data[vert.index]
+    #     i = b.index
+    #     model.morphVec[3 * i    ] += vert.x * weight
+    #     model.morphVec[3 * i + 1] += vert.y * weight
+    #     model.morphVec[3 * i + 2] += vert.z * weight
+    #
+    # @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aMultiPurposeVector.buffer)
+    # @gl.bufferData(@gl.ARRAY_BUFFER, model.morphVec, @gl.STATIC_DRAW)
+    # @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
+    #
+    # # reset positions
+    # for b in base.vert_data
+    #   i = b.index
+    #   model.morphVec[3 * i    ] = 0
+    #   model.morphVec[3 * i + 1] = 0
+    #   model.morphVec[3 * i + 2] = 0
+
     return
 
   moveBones: (model, bones) ->
@@ -292,6 +342,203 @@ class this.MMD.PMXRenderer
     originalBonePositions = []
     parentBones = []
     constrainedBones = []
+
+    for bone, i in model.bones
+      individualBoneMotions[i] = bones[bone.name] ? {
+        rotation: quat4.create([0, 0, 0, 1])
+        location: vec3.create()
+      }
+      boneMotions[i] = {
+        r: quat4.create()
+        p: vec3.create()
+        tainted: true
+      }
+      originalBonePositions[i] = bone.head_pos
+      parentBones[i] = bone.parent_bone_index
+      if bone.name.indexOf('\u3072\u3056') > 0 # ひざ
+        constrainedBones[i] = true # TODO: for now it's only for knees, but extend this if I do PMX
+      if bone.rad_limited
+        contrainedBones[i] = true
+
+    getBoneMotion = (boneIndex) ->
+      motion = boneMotions[boneIndex]
+      return motion if motion and not motion.tainted
+
+      m = individualBoneMotions[boneIndex]
+      r = quat4.set(m.rotation, motion.r)
+      t = m.location
+      p = vec3.set(originalBonePositions[boneIndex], motion.p)
+
+      if parentBones[boneIndex] == -1 # center, foot IK, etc.
+        return boneMotions[boneIndex] = {
+          p: vec3.add(p, t),
+          r: r
+          tainted: false
+        }
+      else
+        parentIndex = parentBones[boneIndex]
+        parentMotion = getBoneMotion(parentIndex)
+        r = quat4.multiply(parentMotion.r, r, r)
+        p = vec3.subtract(p, originalBonePositions[parentIndex])
+        vec3.add(p, t)
+        vec3.rotateByQuat4(p, parentMotion.r)
+        vec3.add(p, parentMotion.p)
+        return boneMotions[boneIndex] = {p: p, r: r, tainted: false}
+
+    resolveIKs = ->
+      # this function is run only once, but to narrow the scope I'm making a function
+      # http://d.hatena.ne.jp/edvakf/20111102/1320268602
+
+      # objects to be reused
+      targetVec = vec3.create()
+      ikboneVec = vec3.create()
+      axis = vec3.create()
+      tmpQ = quat4.create()
+      tmpR = quat4.create()
+
+      for bone, bone_index in model.bones
+        continue if not bone.ik_flag?        # ik stored in bones, skip if this bone is not IK
+        ik = bone
+        ikbonePos = getBoneMotion(bone_index).p
+        targetIndex = ik.target_bone_index
+        minLength = 0.1 * vec3.length(
+          vec3.subtract(
+            originalBonePositions[targetIndex],
+            originalBonePositions[parentBones[targetIndex]], axis)) # temporary use of axis
+
+        for n in [0...ik.iterations]
+          targetPos = getBoneMotion(targetIndex).p # this should calculate the whole chain
+          break if minLength > vec3.length(
+            vec3.subtract(targetPos, ikbonePos, axis)) # temporary use of axis
+
+          for child_bones, i in ik.child_bones
+            boneIndex = child_bones.link_index
+            motion = getBoneMotion(boneIndex)
+            bonePos = motion.p
+            targetPos = getBoneMotion(targetIndex).p if i > 0
+            targetVec = vec3.subtract(targetPos, bonePos, targetVec)
+            targetVecLen = vec3.length(targetVec)
+            continue if targetVecLen < minLength # targetPos == bonePos
+            ikboneVec = vec3.subtract(ikbonePos, bonePos, ikboneVec)
+            ikboneVecLen = vec3.length(ikboneVec)
+            continue if ikboneVecLen < minLength # ikbonePos == bonePos
+            axis = vec3.cross(targetVec, ikboneVec, axis)
+            axisLen = vec3.length(axis)
+            sinTheta = axisLen / ikboneVecLen / targetVecLen
+            continue if sinTheta < 0.001 # ~0.05 degree
+            maxangle = (i + 1) * ik.control_weight * 4 # angle to move in one iteration
+            theta = Math.asin(sinTheta)
+            theta = 3.141592653589793 - theta if vec3.dot(targetVec, ikboneVec) < 0
+            theta = maxangle if theta > maxangle
+            q = quat4.set(vec3.scale(axis, Math.sin(theta / 2) / axisLen), tmpQ) # q is tmpQ
+            q[3] = Math.cos(theta / 2)
+            parentRotation = getBoneMotion(parentBones[boneIndex]).r
+            r = quat4.inverse(parentRotation, tmpR) # r is tmpR
+            r = quat4.multiply(quat4.multiply(r, q), motion.r)
+
+            if constrainedBones[boneIndex]
+              c = r[3] # cos(theta / 2)
+              r = quat4.set([Math.sqrt(1 - c * c), 0, 0, c], r) # axis must be x direction
+              quat4.inverse(boneMotions[boneIndex].r, q)
+              quat4.multiply(r, q, q)
+              q = quat4.multiply(parentRotation, q, q)
+
+            # update individualBoneMotions[boneIndex].rotation
+            quat4.normalize(r, individualBoneMotions[boneIndex].rotation)
+            # update boneMotions[boneIndex].r which is the same as motion.r
+            quat4.multiply(q, motion.r, motion.r)
+
+            # taint for re-calculation
+            # boneMotions[ik.child_bones[j]].tainted = true for j in [0...i]
+            boneMotions[ik.target_bone_index].tainted = true
+
+    resolveIKs()
+
+    # calculate positions/rotations of bones other than IK
+    getBoneMotion(i) for i in [0...model.bones.length]
+
+    #TODO: split
+
+    rotations1 = model.rotations1
+    rotations2 = model.rotations2
+    rotations3 = model.rotations3
+    rotations4 = model.rotations4
+    positions1 = model.positions1
+    positions2 = model.positions2
+    positions3 = model.positions3
+    positions4 = model.positions4
+
+    length = model.vertices.length
+    for i in [0...length]
+      vertex = model.vertices[i]
+      if vertex.weight_type >= 0    # BDEF 1
+        motion1 = boneMotions[vertex.bone_num1]
+        rot1 = motion1.r
+        pos1 = motion1.p
+        rotations1[i * 4    ] = rot1[0]
+        rotations1[i * 4 + 1] = rot1[1]
+        rotations1[i * 4 + 2] = rot1[2]
+        rotations1[i * 4 + 3] = rot1[3]
+        positions1[i * 3    ] = pos1[0]
+        positions1[i * 3 + 1] = pos1[1]
+        positions1[i * 3 + 2] = pos1[2]
+      if vertex.weight_type >= 1    # BDEF 2
+        motion2 = boneMotions[vertex.bone_num2]
+        rot2 = motion2.r
+        pos2 = motion2.p
+        rotations2[i * 4    ] = rot2[0]
+        rotations2[i * 4 + 1] = rot2[1]
+        rotations2[i * 4 + 2] = rot2[2]
+        rotations2[i * 4 + 3] = rot2[3]
+        positions2[i * 3    ] = pos2[0]
+        positions2[i * 3 + 1] = pos2[1]
+        positions2[i * 3 + 2] = pos2[2]
+      if vertex.weight_type == 2    # BDEF 4
+        motion3 = boneMotions[vertex.bone_num3]
+        motion4 = boneMotions[vertex.bone_num4]
+        # motion3
+        rot3 = motion3.r
+        pos3 = motion3.p
+        rotations3[i * 4    ] = rot3[0]
+        rotations3[i * 4 + 1] = rot3[1]
+        rotations3[i * 4 + 2] = rot3[2]
+        rotations3[i * 4 + 3] = rot3[3]
+        positions3[i * 3    ] = pos3[0]
+        positions3[i * 3 + 1] = pos3[1]
+        positions3[i * 3 + 2] = pos3[2]
+        # motion4
+        rot4 = motion4.r
+        pos4 = motion4.p
+        rotations4[i * 4    ] = rot4[0]
+        rotations4[i * 4 + 1] = rot4[1]
+        rotations4[i * 4 + 2] = rot4[2]
+        rotations4[i * 4 + 3] = rot4[3]
+        positions4[i * 3    ] = pos4[0]
+        positions4[i * 3 + 1] = pos4[1]
+        positions4[i * 3 + 2] = pos4[2]
+
+      if vertex.weight_type == 4    # SDEF
+        # not implemented
+        null
+
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone1Rotation.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, rotations1, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone2Rotation.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, rotations2, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone3Rotation.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, rotations3, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone4Rotation.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, rotations4, @gl.STATIC_DRAW)
+
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone1Position.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, positions1, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone2Position.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, positions2, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone3Position.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, positions3, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, @vbuffers.aBone4Position.buffer)
+    @gl.bufferData(@gl.ARRAY_BUFFER, positions4, @gl.STATIC_DRAW)
+    @gl.bindBuffer(@gl.ARRAY_BUFFER, null)
     return
 
   initMatrices: ->

@@ -203,7 +203,6 @@ class this.MMD
   setPMXUniforms: ->
     if not @pmxProgram?
       @pmxProgram = @initShaders(MMD.PMXVertexShaderSource, MMD.PMXFragmentShaderSource)
-      console.log @pmxProgram
     @gl.useProgram(@pmxProgram)
     # @gl.uniform1f(@pmxProgram.uEdgeThickness, @edgeThickness)
     @gl.uniformMatrix4fv(@pmxProgram.uMVMatrix, false, @mvMatrix)

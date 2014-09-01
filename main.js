@@ -1,7 +1,7 @@
 window.onload = function() {
   var canvas = document.createElement('canvas');
-  canvas.width = 720;
-  canvas.height = 480;
+  canvas.width = 1080;
+  canvas.height = 720;
   canvas.style.border = 'solid black 1px';
 
   document.body.appendChild(canvas);
@@ -12,7 +12,7 @@ window.onload = function() {
   mmd.registerKeyListener(document);
   mmd.registerMouseListener(document);
 
-  // mmd.addModel("miku", new MMD.Model('model', 'Miku_Hatsune_metal.pmd'));
+  mmd.addModel("miku", new MMD.Model('model', 'Miku_Hatsune_metal.pmd'));
   // mmd.addModel("rin",  new MMD.Model('model', 'Rin_Kagamene_act2.pmd'));
   // mmd.addModel("len",  new MMD.Model('model', 'Len_Kagamine.pmd'));
   mmd.addModel("Tda_Miku", new MMD.Model('model/Tda_Miku', 'Tda_Miku.pmx'));
@@ -71,8 +71,9 @@ window.onload = function() {
 
   mmd.load(function() {
     var tda_miku = mmd.getModelRenderer("Tda_Miku");
-    // var miku = mmd.getModelRenderer("miku");
-    // miku.translate(0.0, 0.0, -10.0);
+    var miku = mmd.getModelRenderer("miku");
+    miku.translate(8.0, 0.0, 0.0);
+    tda_miku.translate(-8.0, 0.0, 0.0);
 
     mmd.start();
     mmd.play();
@@ -87,10 +88,20 @@ window.onload = function() {
     //   }
     // });
     
+    // var motion = new MMD.Motion('motion/arm.vmd');
+    // var motion = new MMD.Motion('motion/test.vmd');
+    // var motion = new MMD.Motion('motion/kishimen.vmd');
+    // var motion = new MMD.Motion('motion/metal_miku.vmd');
     var motion = new MMD.Motion('motion/tda_miku.vmd');
     motion.load(function() {
       tda_miku.addModelMotion("motion", motion);
-      tda_miku.play("motion");
+      miku.addModelMotion("motion", motion);
+
+      var motionBtn = document.getElementById("motion");
+      motionBtn.onclick = function() {
+        tda_miku.play("motion");
+        miku.play("motion");
+      }
     });
 
   });

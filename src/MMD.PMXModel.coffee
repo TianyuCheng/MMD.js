@@ -391,9 +391,6 @@ class PMXBone
     @parent_bone_index = view.getBySize(offset, model.bone_index_size, true); offset += model.bone_index_size
     @morph_bone_index = view.getInt32(offset, true); offset += size_Uint32
 
-    # console.log "parent: #{@parent_bone_index}"
-    # console.log "morph: #{@morph_bone_index}"
-
     # 0x0001: 接続先(PMD子ボーン指定)表示方法 -> 0:座標オフセットで指定 1:ボーンで指定
     # 0x0002: 回転可能
     # 0x0004: 移動可能
@@ -407,9 +404,9 @@ class PMXBone
     # 0x0800: ローカル軸
     # 0x1000: 物理後変形
     # 0x2000: 外部親変形
-    @bit_flag = view.getUint16(offset, true); offset += size_Uint16
+    bit_flag = view.getUint16(offset, true); offset += size_Uint16
     # console.log @bit_flag
-    if @bit_flag & 0x1
+    if bit_flag & 0x1
       @connect_index = view.getBySize(offset, model.bone_index_size); offset += model.bone_index_size
     else
       @offset = new Float32Array([
@@ -419,18 +416,18 @@ class PMXBone
       ]); offset += 3 * size_Float32
       # console.log @offset
 
-    if @bit_flag & 0x0300
+    if bit_flag & 0x0300
       @inverse_parent_index = view.getBySize(offset, model.bone_index_size, true); offset += model.bone_index_size
       @inverse_rate = view.getFloat32(offset, true); offset += size_Float32
 
-    if @bit_flag & 0x0400
+    if bit_flag & 0x0400
       @axis = new Float32Array([
         view.getFloat32(offset, true),
         view.getFloat32(offset + size_Float32, true),
         view.getFloat32(offset + size_Float32 * 2, true)
       ]); offset += 3 * size_Float32
 
-    if @bit_flag & 0x0800
+    if bit_flag & 0x0800
       @x_axis = new Float32Array([
         view.getFloat32(offset, true),
         view.getFloat32(offset + size_Float32, true),
@@ -442,32 +439,33 @@ class PMXBone
         view.getFloat32(offset + size_Float32 * 2, true)
       ]); offset += 3 * size_Float32
 
-    if @bit_flag & 0x2000
+    if bit_flag & 0x2000
       @parent_key = view.getInt32(offset, true); offset += size_Uint32
     
-    if @bit_flag & 0x0020
-      @ik_target_index = view.getBySize(offset, model.bone_index_size, true); offset += model.bone_index_size
-      @ik_loop_len = view.getUint32(offset, true); offset += size_Uint32
+    if bit_flag & 0x0020
+      @ik_flag = true
+      @target_bone_index = view.getBySize(offset, model.bone_index_size, true); offset += model.bone_index_size
+      @iterations = view.getUint32(offset, true); offset += size_Uint32
       # 4x
       @ik_rad_limited = view.getFloat32(offset, true); offset += size_Float32
-      length = view.getUint32(offset, true); offset += size_Uint32
-      @ik_links = []
-      for i in [0...length]
-        ik_link = {}
-        ik_link['link_index'] = view.getBySize(offset, model.bone_index_size); offset += model.bone_index_size
-        ik_link['rad_limited'] = view.getUint8(offset); offset += size_Uint8   # on/off
-        if ik_link['rad_limited']
-          ik_link['lower_vector'] = new Float32Array([
+      chain_length = view.getUint32(offset, true); offset += size_Uint32
+      @child_bones = []
+      for i in [0...chain_length]
+        child_bone = {}
+        child_bone['link_index'] = view.getBySize(offset, model.bone_index_size, true); offset += model.bone_index_size
+        child_bone['rad_limited'] = view.getUint8(offset); offset += size_Uint8   # on/off
+        if child_bone['rad_limited']
+          child_bone['lower_vector'] = new Float32Array([
             view.getFloat32(offset, true),
             view.getFloat32(offset + size_Float32, true),
             view.getFloat32(offset + size_Float32 * 2, true)
           ]); offset += 3 * size_Float32
-          ik_link['upper_vector'] = new Float32Array([
+          child_bone['upper_vector'] = new Float32Array([
             view.getFloat32(offset, true),
             view.getFloat32(offset + size_Float32, true),
             view.getFloat32(offset + size_Float32 * 2, true)
           ]); offset += 3 * size_Float32
-        @ik_links.push(ik_link)
+        @child_bones.push(child_bone)
 
     @size = offset - _offset
 
@@ -653,7 +651,7 @@ class PMXRigidBody
       view.getFloat32(offset + size_Float32, true),
       view.getFloat32(offset + size_Float32 * 2, true)
     ]); offset += 3 * size_Float32
-    # rad (x,y,z) -> ラジアン角, this seems to be incorrect
+    # rad (x,y,z) -> ラジアン角
     @rad = new Float32Array([
       view.getFloat32(offset, true),
       view.getFloat32(offset + size_Float32, true),

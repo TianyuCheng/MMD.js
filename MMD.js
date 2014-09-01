@@ -224,7 +224,6 @@
       var lightDirection;
       if (this.pmxProgram == null) {
         this.pmxProgram = this.initShaders(MMD.PMXVertexShaderSource, MMD.PMXFragmentShaderSource);
-        console.log(this.pmxProgram);
       }
       this.gl.useProgram(this.pmxProgram);
       this.gl.uniformMatrix4fv(this.pmxProgram.uMVMatrix, false, this.mvMatrix);
@@ -2794,7 +2793,7 @@
 
   PMXBone = (function() {
     function PMXBone(buffer, view, offset, model) {
-      var i, ik_link, len, length, _i, _offset;
+      var bit_flag, chain_length, child_bone, i, len, _i, _offset;
       _offset = offset;
       len = view.getUint32(offset, true);
       this.name = view.getString(offset + size_Uint32, len, model.utf8Encoding);
@@ -2808,58 +2807,59 @@
       offset += model.bone_index_size;
       this.morph_bone_index = view.getInt32(offset, true);
       offset += size_Uint32;
-      this.bit_flag = view.getUint16(offset, true);
+      bit_flag = view.getUint16(offset, true);
       offset += size_Uint16;
-      if (this.bit_flag & 0x1) {
+      if (bit_flag & 0x1) {
         this.connect_index = view.getBySize(offset, model.bone_index_size);
         offset += model.bone_index_size;
       } else {
         this.offset = new Float32Array([view.getFloat32(offset, true), view.getFloat32(offset + size_Float32, true), view.getFloat32(offset + size_Float32 * 2, true)]);
         offset += 3 * size_Float32;
       }
-      if (this.bit_flag & 0x0300) {
+      if (bit_flag & 0x0300) {
         this.inverse_parent_index = view.getBySize(offset, model.bone_index_size, true);
         offset += model.bone_index_size;
         this.inverse_rate = view.getFloat32(offset, true);
         offset += size_Float32;
       }
-      if (this.bit_flag & 0x0400) {
+      if (bit_flag & 0x0400) {
         this.axis = new Float32Array([view.getFloat32(offset, true), view.getFloat32(offset + size_Float32, true), view.getFloat32(offset + size_Float32 * 2, true)]);
         offset += 3 * size_Float32;
       }
-      if (this.bit_flag & 0x0800) {
+      if (bit_flag & 0x0800) {
         this.x_axis = new Float32Array([view.getFloat32(offset, true), view.getFloat32(offset + size_Float32, true), view.getFloat32(offset + size_Float32 * 2, true)]);
         offset += 3 * size_Float32;
         this.z_axis = new Float32Array([view.getFloat32(offset, true), view.getFloat32(offset + size_Float32, true), view.getFloat32(offset + size_Float32 * 2, true)]);
         offset += 3 * size_Float32;
       }
-      if (this.bit_flag & 0x2000) {
+      if (bit_flag & 0x2000) {
         this.parent_key = view.getInt32(offset, true);
         offset += size_Uint32;
       }
-      if (this.bit_flag & 0x0020) {
-        this.ik_target_index = view.getBySize(offset, model.bone_index_size, true);
+      if (bit_flag & 0x0020) {
+        this.ik_flag = true;
+        this.target_bone_index = view.getBySize(offset, model.bone_index_size, true);
         offset += model.bone_index_size;
-        this.ik_loop_len = view.getUint32(offset, true);
+        this.iterations = view.getUint32(offset, true);
         offset += size_Uint32;
         this.ik_rad_limited = view.getFloat32(offset, true);
         offset += size_Float32;
-        length = view.getUint32(offset, true);
+        chain_length = view.getUint32(offset, true);
         offset += size_Uint32;
-        this.ik_links = [];
-        for (i = _i = 0; 0 <= length ? _i < length : _i > length; i = 0 <= length ? ++_i : --_i) {
-          ik_link = {};
-          ik_link['link_index'] = view.getBySize(offset, model.bone_index_size);
+        this.child_bones = [];
+        for (i = _i = 0; 0 <= chain_length ? _i < chain_length : _i > chain_length; i = 0 <= chain_length ? ++_i : --_i) {
+          child_bone = {};
+          child_bone['link_index'] = view.getBySize(offset, model.bone_index_size, true);
           offset += model.bone_index_size;
-          ik_link['rad_limited'] = view.getUint8(offset);
+          child_bone['rad_limited'] = view.getUint8(offset);
           offset += size_Uint8;
-          if (ik_link['rad_limited']) {
-            ik_link['lower_vector'] = new Float32Array([view.getFloat32(offset, true), view.getFloat32(offset + size_Float32, true), view.getFloat32(offset + size_Float32 * 2, true)]);
+          if (child_bone['rad_limited']) {
+            child_bone['lower_vector'] = new Float32Array([view.getFloat32(offset, true), view.getFloat32(offset + size_Float32, true), view.getFloat32(offset + size_Float32 * 2, true)]);
             offset += 3 * size_Float32;
-            ik_link['upper_vector'] = new Float32Array([view.getFloat32(offset, true), view.getFloat32(offset + size_Float32, true), view.getFloat32(offset + size_Float32 * 2, true)]);
+            child_bone['upper_vector'] = new Float32Array([view.getFloat32(offset, true), view.getFloat32(offset + size_Float32, true), view.getFloat32(offset + size_Float32 * 2, true)]);
             offset += 3 * size_Float32;
           }
-          this.ik_links.push(ik_link);
+          this.child_bones.push(child_bone);
         }
       }
       this.size = offset - _offset;
@@ -3099,11 +3099,15 @@
     }
 
     PMXRenderer.prototype.initVertices = function() {
-      var bone1, bone2, bone3, bone4, buffer, data, i, length, model, morphVec, normals, positions, positions1, positions2, positions3, positions4, rotations1, rotations2, rotations3, rotations4, sdefC, sdefR0, sdefR1, uvs, vertex, weightTypes, weights, _i, _j, _len, _ref;
+      var bone1, bone2, bone3, bone4, buffer, data, i, length, model, morphVec, normals, positions, positions1, positions2, positions3, positions4, rotations1, rotations2, rotations3, rotations4, sdefC, sdefR0, sdefR1, uvs, vectors1, vectors2, vectors3, vectors4, vertex, weightTypes, weights, _i, _j, _len, _ref;
       model = this.model;
       length = model.vertices.length;
       weightTypes = new Float32Array(length);
       weights = new Float32Array(length * 4);
+      vectors1 = new Float32Array(length * 3);
+      vectors2 = new Float32Array(length * 3);
+      vectors3 = new Float32Array(length * 3);
+      vectors4 = new Float32Array(length * 3);
       positions1 = new Float32Array(length * 3);
       positions2 = new Float32Array(length * 3);
       positions3 = new Float32Array(length * 3);
@@ -3125,6 +3129,9 @@
         if (vertex.weight_type >= 0) {
           bone1 = model.bones[vertex.bone_num1];
           rotations1[4 * i + 3] = 1;
+          vectors1[3 * i] = vertex.x - bone1.head_pos[0];
+          vectors1[3 * i + 1] = vertex.y - bone1.head_pos[1];
+          vectors1[3 * i + 2] = vertex.z - bone1.head_pos[2];
           positions1[3 * i] = bone1.head_pos[0];
           positions1[3 * i + 1] = bone1.head_pos[1];
           positions1[3 * i + 2] = bone1.head_pos[2];
@@ -3133,6 +3140,9 @@
         if (vertex.weight_type >= 1) {
           bone2 = model.bones[vertex.bone_num2];
           rotations2[4 * i + 3] = 1;
+          vectors2[3 * i] = vertex.x - bone2.head_pos[0];
+          vectors2[3 * i + 1] = vertex.y - bone2.head_pos[1];
+          vectors2[3 * i + 2] = vertex.z - bone2.head_pos[2];
           positions2[3 * i] = bone2.head_pos[0];
           positions2[3 * i + 1] = bone2.head_pos[1];
           positions2[3 * i + 2] = bone2.head_pos[2];
@@ -3144,6 +3154,12 @@
           bone4 = model.bones[vertex.bone_num4];
           rotations3[4 * i + 3] = 1;
           rotations4[4 * i + 3] = 1;
+          vectors3[3 * i] = vertex.x - bone3.head_pos[0];
+          vectors3[3 * i + 1] = vertex.y - bone3.head_pos[1];
+          vectors3[3 * i + 2] = vertex.z - bone3.head_pos[2];
+          vectors4[3 * i] = vertex.x - bone4.head_pos[0];
+          vectors4[3 * i + 1] = vertex.y - bone4.head_pos[1];
+          vectors4[3 * i + 2] = vertex.z - bone4.head_pos[2];
           positions3[3 * i] = bone3.head_pos[0];
           positions3[3 * i + 1] = bone3.head_pos[1];
           positions3[3 * i + 2] = bone3.head_pos[2];
@@ -3179,13 +3195,13 @@
       model.rotations2 = rotations2;
       model.rotations3 = rotations3;
       model.rotations4 = rotations4;
+      model.positions1 = positions1;
+      model.positions2 = positions2;
+      model.positions3 = positions3;
+      model.positions4 = positions4;
       model.morphVec = morphVec;
       _ref = [
         {
-          attribute: 'aMultiPurposeVector',
-          array: morphVec,
-          size: 3
-        }, {
           attribute: 'aWeightType',
           array: weightTypes,
           size: 1
@@ -3193,6 +3209,22 @@
           attribute: 'aBoneWeights',
           array: weights,
           size: 4
+        }, {
+          attribute: 'aVectorFromBone1',
+          array: vectors1,
+          size: 3
+        }, {
+          attribute: 'aVectorFromBone2',
+          array: vectors2,
+          size: 3
+        }, {
+          attribute: 'aVectorFromBone3',
+          array: vectors3,
+          size: 3
+        }, {
+          attribute: 'aVectorFromBone4',
+          array: vectors4,
+          size: 3
         }, {
           attribute: 'aBone1Position',
           array: positions1,
@@ -3408,10 +3440,17 @@
       this.moveBones(this.model, bones);
     };
 
-    PMXRenderer.prototype.moveMorphs = function(model, morphs) {};
+    PMXRenderer.prototype.moveMorphs = function(model, morphs) {
+      if (!morphs) {
+        return;
+      }
+      if (model.morphs.length === 0) {
+        return;
+      }
+    };
 
     PMXRenderer.prototype.moveBones = function(model, bones) {
-      var boneMotions, constrainedBones, individualBoneMotions, originalBonePositions, parentBones;
+      var bone, boneMotions, constrainedBones, getBoneMotion, i, individualBoneMotions, length, motion1, motion2, motion3, motion4, originalBonePositions, parentBones, pos1, pos2, pos3, pos4, positions1, positions2, positions3, positions4, resolveIKs, rot1, rot2, rot3, rot4, rotations1, rotations2, rotations3, rotations4, vertex, _i, _j, _k, _len, _ref, _ref1, _ref2;
       if (!bones) {
         return;
       }
@@ -3420,6 +3459,226 @@
       originalBonePositions = [];
       parentBones = [];
       constrainedBones = [];
+      _ref = model.bones;
+      for (i = _i = 0, _len = _ref.length; _i < _len; i = ++_i) {
+        bone = _ref[i];
+        individualBoneMotions[i] = (_ref1 = bones[bone.name]) != null ? _ref1 : {
+          rotation: quat4.create([0, 0, 0, 1]),
+          location: vec3.create()
+        };
+        boneMotions[i] = {
+          r: quat4.create(),
+          p: vec3.create(),
+          tainted: true
+        };
+        originalBonePositions[i] = bone.head_pos;
+        parentBones[i] = bone.parent_bone_index;
+        if (bone.name.indexOf('\u3072\u3056') > 0) {
+          constrainedBones[i] = true;
+        }
+        if (bone.rad_limited) {
+          contrainedBones[i] = true;
+        }
+      }
+      getBoneMotion = function(boneIndex) {
+        var m, motion, p, parentIndex, parentMotion, r, t;
+        motion = boneMotions[boneIndex];
+        if (motion && !motion.tainted) {
+          return motion;
+        }
+        m = individualBoneMotions[boneIndex];
+        r = quat4.set(m.rotation, motion.r);
+        t = m.location;
+        p = vec3.set(originalBonePositions[boneIndex], motion.p);
+        if (parentBones[boneIndex] === -1) {
+          return boneMotions[boneIndex] = {
+            p: vec3.add(p, t),
+            r: r,
+            tainted: false
+          };
+        } else {
+          parentIndex = parentBones[boneIndex];
+          parentMotion = getBoneMotion(parentIndex);
+          r = quat4.multiply(parentMotion.r, r, r);
+          p = vec3.subtract(p, originalBonePositions[parentIndex]);
+          vec3.add(p, t);
+          vec3.rotateByQuat4(p, parentMotion.r);
+          vec3.add(p, parentMotion.p);
+          return boneMotions[boneIndex] = {
+            p: p,
+            r: r,
+            tainted: false
+          };
+        }
+      };
+      resolveIKs = function() {
+        var axis, axisLen, boneIndex, bonePos, bone_index, c, child_bones, ik, ikbonePos, ikboneVec, ikboneVecLen, maxangle, minLength, motion, n, parentRotation, q, r, sinTheta, targetIndex, targetPos, targetVec, targetVecLen, theta, tmpQ, tmpR, _j, _len1, _ref2, _results;
+        targetVec = vec3.create();
+        ikboneVec = vec3.create();
+        axis = vec3.create();
+        tmpQ = quat4.create();
+        tmpR = quat4.create();
+        _ref2 = model.bones;
+        _results = [];
+        for (bone_index = _j = 0, _len1 = _ref2.length; _j < _len1; bone_index = ++_j) {
+          bone = _ref2[bone_index];
+          if (bone.ik_flag == null) {
+            continue;
+          }
+          ik = bone;
+          ikbonePos = getBoneMotion(bone_index).p;
+          targetIndex = ik.target_bone_index;
+          minLength = 0.1 * vec3.length(vec3.subtract(originalBonePositions[targetIndex], originalBonePositions[parentBones[targetIndex]], axis));
+          _results.push((function() {
+            var _k, _ref3, _results1;
+            _results1 = [];
+            for (n = _k = 0, _ref3 = ik.iterations; 0 <= _ref3 ? _k < _ref3 : _k > _ref3; n = 0 <= _ref3 ? ++_k : --_k) {
+              targetPos = getBoneMotion(targetIndex).p;
+              if (minLength > vec3.length(vec3.subtract(targetPos, ikbonePos, axis))) {
+                break;
+              }
+              _results1.push((function() {
+                var _l, _len2, _ref4, _results2;
+                _ref4 = ik.child_bones;
+                _results2 = [];
+                for (i = _l = 0, _len2 = _ref4.length; _l < _len2; i = ++_l) {
+                  child_bones = _ref4[i];
+                  boneIndex = child_bones.link_index;
+                  motion = getBoneMotion(boneIndex);
+                  bonePos = motion.p;
+                  if (i > 0) {
+                    targetPos = getBoneMotion(targetIndex).p;
+                  }
+                  targetVec = vec3.subtract(targetPos, bonePos, targetVec);
+                  targetVecLen = vec3.length(targetVec);
+                  if (targetVecLen < minLength) {
+                    continue;
+                  }
+                  ikboneVec = vec3.subtract(ikbonePos, bonePos, ikboneVec);
+                  ikboneVecLen = vec3.length(ikboneVec);
+                  if (ikboneVecLen < minLength) {
+                    continue;
+                  }
+                  axis = vec3.cross(targetVec, ikboneVec, axis);
+                  axisLen = vec3.length(axis);
+                  sinTheta = axisLen / ikboneVecLen / targetVecLen;
+                  if (sinTheta < 0.001) {
+                    continue;
+                  }
+                  maxangle = (i + 1) * ik.control_weight * 4;
+                  theta = Math.asin(sinTheta);
+                  if (vec3.dot(targetVec, ikboneVec) < 0) {
+                    theta = 3.141592653589793 - theta;
+                  }
+                  if (theta > maxangle) {
+                    theta = maxangle;
+                  }
+                  q = quat4.set(vec3.scale(axis, Math.sin(theta / 2) / axisLen), tmpQ);
+                  q[3] = Math.cos(theta / 2);
+                  parentRotation = getBoneMotion(parentBones[boneIndex]).r;
+                  r = quat4.inverse(parentRotation, tmpR);
+                  r = quat4.multiply(quat4.multiply(r, q), motion.r);
+                  if (constrainedBones[boneIndex]) {
+                    c = r[3];
+                    r = quat4.set([Math.sqrt(1 - c * c), 0, 0, c], r);
+                    quat4.inverse(boneMotions[boneIndex].r, q);
+                    quat4.multiply(r, q, q);
+                    q = quat4.multiply(parentRotation, q, q);
+                  }
+                  quat4.normalize(r, individualBoneMotions[boneIndex].rotation);
+                  quat4.multiply(q, motion.r, motion.r);
+                  _results2.push(boneMotions[ik.target_bone_index].tainted = true);
+                }
+                return _results2;
+              })());
+            }
+            return _results1;
+          })());
+        }
+        return _results;
+      };
+      resolveIKs();
+      for (i = _j = 0, _ref2 = model.bones.length; 0 <= _ref2 ? _j < _ref2 : _j > _ref2; i = 0 <= _ref2 ? ++_j : --_j) {
+        getBoneMotion(i);
+      }
+      rotations1 = model.rotations1;
+      rotations2 = model.rotations2;
+      rotations3 = model.rotations3;
+      rotations4 = model.rotations4;
+      positions1 = model.positions1;
+      positions2 = model.positions2;
+      positions3 = model.positions3;
+      positions4 = model.positions4;
+      length = model.vertices.length;
+      for (i = _k = 0; 0 <= length ? _k < length : _k > length; i = 0 <= length ? ++_k : --_k) {
+        vertex = model.vertices[i];
+        if (vertex.weight_type >= 0) {
+          motion1 = boneMotions[vertex.bone_num1];
+          rot1 = motion1.r;
+          pos1 = motion1.p;
+          rotations1[i * 4] = rot1[0];
+          rotations1[i * 4 + 1] = rot1[1];
+          rotations1[i * 4 + 2] = rot1[2];
+          rotations1[i * 4 + 3] = rot1[3];
+          positions1[i * 3] = pos1[0];
+          positions1[i * 3 + 1] = pos1[1];
+          positions1[i * 3 + 2] = pos1[2];
+        }
+        if (vertex.weight_type >= 1) {
+          motion2 = boneMotions[vertex.bone_num2];
+          rot2 = motion2.r;
+          pos2 = motion2.p;
+          rotations2[i * 4] = rot2[0];
+          rotations2[i * 4 + 1] = rot2[1];
+          rotations2[i * 4 + 2] = rot2[2];
+          rotations2[i * 4 + 3] = rot2[3];
+          positions2[i * 3] = pos2[0];
+          positions2[i * 3 + 1] = pos2[1];
+          positions2[i * 3 + 2] = pos2[2];
+        }
+        if (vertex.weight_type === 2) {
+          motion3 = boneMotions[vertex.bone_num3];
+          motion4 = boneMotions[vertex.bone_num4];
+          rot3 = motion3.r;
+          pos3 = motion3.p;
+          rotations3[i * 4] = rot3[0];
+          rotations3[i * 4 + 1] = rot3[1];
+          rotations3[i * 4 + 2] = rot3[2];
+          rotations3[i * 4 + 3] = rot3[3];
+          positions3[i * 3] = pos3[0];
+          positions3[i * 3 + 1] = pos3[1];
+          positions3[i * 3 + 2] = pos3[2];
+          rot4 = motion4.r;
+          pos4 = motion4.p;
+          rotations4[i * 4] = rot4[0];
+          rotations4[i * 4 + 1] = rot4[1];
+          rotations4[i * 4 + 2] = rot4[2];
+          rotations4[i * 4 + 3] = rot4[3];
+          positions4[i * 3] = pos4[0];
+          positions4[i * 3 + 1] = pos4[1];
+          positions4[i * 3 + 2] = pos4[2];
+        }
+        if (vertex.weight_type === 4) {
+          null;
+        }
+      }
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone1Rotation.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, rotations1, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone2Rotation.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, rotations2, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone3Rotation.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, rotations3, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone4Rotation.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, rotations4, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone1Position.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, positions1, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone2Position.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, positions2, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone3Position.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, positions3, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vbuffers.aBone4Position.buffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, positions4, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     };
 
     PMXRenderer.prototype.initMatrices = function() {
@@ -3458,7 +3717,7 @@
 
   })();
 
-  MMD.PMXVertexShaderSource = '\nprecision mediump float;\n\nuniform mat4 uMVMatrix; // model-view matrix (model -> view space)\nuniform mat4 uPMatrix; // projection matrix (view -> projection space)\nuniform mat4 uNMatrix; // normal matrix (inverse of transpose of model-view matrix)\n\nattribute vec3 aVertexPosition;\nattribute vec3 aVertexNormal;\nattribute vec2 aTextureCoord;\n\n// for vertices\nattribute float aWeightType;   // 0=BDEF1 1=BDEF2 2=BDEF4 3=SDEF\nattribute vec4 aBoneWeights;\n// remove all aVectorFromBoneX due to the limit of VertexShader attributes\nattribute vec3 aBone1Position;\nattribute vec3 aBone2Position;\nattribute vec3 aBone3Position;\nattribute vec3 aBone4Position;\nattribute vec4 aBone1Rotation;\nattribute vec4 aBone2Rotation;\nattribute vec4 aBone3Rotation;\nattribute vec4 aBone4Rotation;\nattribute vec3 aMultiPurposeVector;\n\nvarying vec2 vTextureCoord;\nvarying vec3 vPosition;\nvarying vec3 vNormal;\n\nvec3 qtransform(vec4 q, vec3 v) {\n  return v + 2.0 * cross(cross(v, q.xyz) - q.w*v, q.xyz);\n}\n\nvoid main() {\n  vec3 position;\n  vec3 normal = aVertexNormal;\n  vec3 morph = aMultiPurposeVector;\n\n  // calculate vector from bones\n  vec3 vectorFromBone1 = aVertexPosition - aBone1Position;\n  vec3 vectorFromBone2 = aVertexPosition - aBone2Position;\n  vec3 vectorFromBone3 = aVertexPosition - aBone3Position;\n  vec3 vectorFromBone4 = aVertexPosition - aBone4Position;\n\n  // check type of deformation\n  int type = int(aWeightType);\n  if (type == 0)            // BDEF1\n  {\n    position = qtransform(aBone1Rotation, vectorFromBone1 + morph) + aBone1Position;\n  }\n  else if (type == 1)       // BDEF2\n  {\n    vec3 p1 = qtransform(aBone1Rotation, vectorFromBone1 + morph) + aBone1Position;\n    vec3 p2 = qtransform(aBone2Rotation, vectorFromBone2 + morph) + aBone2Position;\n    position = mix(p2, p1, aBoneWeights[0]);\n  }\n  else if (type == 2)       // BDEF 4\n  {\n    vec3 p1 = qtransform(aBone1Rotation, vectorFromBone1 + morph) + aBone1Position;\n    vec3 p2 = qtransform(aBone2Rotation, vectorFromBone2 + morph) + aBone2Position;\n    vec3 p3 = qtransform(aBone3Rotation, vectorFromBone3 + morph) + aBone3Position;\n    vec3 p4 = qtransform(aBone4Rotation, vectorFromBone4 + morph) + aBone4Position;\n    position = p1 * aBoneWeights[0] + p2 * aBoneWeights[1] + p3 * aBoneWeights[2] + p4 * aBoneWeights[3];\n  }\n  else                      // SDEF \n  {\n    // not implemented\n    vec3 p1 = qtransform(aBone1Rotation, vectorFromBone1 + morph) + aBone1Position;\n    vec3 p2 = qtransform(aBone2Rotation, vectorFromBone2 + morph) + aBone2Position;\n    position = mix(p2, p1, aBoneWeights[0]);\n  }\n\n  gl_Position = uPMatrix * uMVMatrix * vec4(position, 1.0);\n\n  // for fragment shader\n  vTextureCoord = aTextureCoord;\n  vPosition = (uMVMatrix * vec4(position, 1.0)).xyz;\n  // vPosition = (uMVMatrix * vec4(aVertexPosition, 1.0)).xyz;\n  vNormal = (uNMatrix * vec4(normal, 1.0)).xyz;\n}\n';
+  MMD.PMXVertexShaderSource = '\nprecision mediump float;\n\nuniform mat4 uMVMatrix; // model-view matrix (model -> view space)\nuniform mat4 uPMatrix; // projection matrix (view -> projection space)\nuniform mat4 uNMatrix; // normal matrix (inverse of transpose of model-view matrix)\n\n// attribute vec3 aVertexPosition;\nattribute vec3 aVertexNormal;\nattribute vec2 aTextureCoord;\n\n// for vertices\nattribute float aWeightType;   // 0=BDEF1 1=BDEF2 2=BDEF4 3=SDEF\nattribute vec4 aBoneWeights;\n// remove all aVectorFromBoneX due to the limit of VertexShader attributes\nattribute vec3 aVectorFromBone1;\nattribute vec3 aVectorFromBone2;\nattribute vec3 aVectorFromBone3;\nattribute vec3 aVectorFromBone4;\n\nattribute vec3 aBone1Position;\nattribute vec3 aBone2Position;\nattribute vec3 aBone3Position;\nattribute vec3 aBone4Position;\nattribute vec4 aBone1Rotation;\nattribute vec4 aBone2Rotation;\nattribute vec4 aBone3Rotation;\nattribute vec4 aBone4Rotation;\n// attribute vec3 aMultiPurposeVector;\n\nvarying vec2 vTextureCoord;\nvarying vec3 vPosition;\nvarying vec3 vNormal;\n\nvec3 qtransform(vec4 q, vec3 v) {\n  return v + 2.0 * cross(cross(v, q.xyz) - q.w*v, q.xyz);\n}\n\nvoid main() {\n  vec3 position;\n  vec3 normal = aVertexNormal;\n  // vec3 morph = aMultiPurposeVector;\n  vec3 morph = vec3(0, 0, 0);\n\n  // // calculate vector from bones\n  // vec3 vectorFromBone1 = aVertexPosition - aBone1Position;\n  // vec3 vectorFromBone2 = aVertexPosition - aBone2Position;\n  // vec3 vectorFromBone3 = aVertexPosition - aBone3Position;\n  // vec3 vectorFromBone4 = aVertexPosition - aBone4Position;\n\n  // check type of deformation\n  int type = int(aWeightType);\n  if (type == 0)            // BDEF1\n  {\n    position = qtransform(aBone1Rotation, aVectorFromBone1 + morph) + aBone1Position;\n  }\n  else if (type == 1)       // BDEF2\n  {\n    vec3 p1 = qtransform(aBone1Rotation, aVectorFromBone1 + morph) + aBone1Position;\n    vec3 p2 = qtransform(aBone2Rotation, aVectorFromBone2 + morph) + aBone2Position;\n    position = mix(p2, p1, aBoneWeights[0]);\n  }\n  else if (type == 2)       // BDEF 4\n  {\n    vec3 p1 = qtransform(aBone1Rotation, aVectorFromBone1 + morph) + aBone1Position;\n    vec3 p2 = qtransform(aBone2Rotation, aVectorFromBone2 + morph) + aBone2Position;\n    vec3 p3 = qtransform(aBone3Rotation, aVectorFromBone3 + morph) + aBone3Position;\n    vec3 p4 = qtransform(aBone4Rotation, aVectorFromBone4 + morph) + aBone4Position;\n    position = p1 * aBoneWeights[0] + p2 * aBoneWeights[1] + p3 * aBoneWeights[2] + p4 * aBoneWeights[3];\n  }\n  else                      // SDEF \n  {\n    // not implemented\n    vec3 p1 = qtransform(aBone1Rotation, aVectorFromBone1 + morph) + aBone1Position;\n    vec3 p2 = qtransform(aBone2Rotation, aVectorFromBone2 + morph) + aBone2Position;\n    position = mix(p2, p1, aBoneWeights[0]);\n  }\n\n  gl_Position = uPMatrix * uMVMatrix * vec4(position, 1.0);\n\n  // for fragment shader\n  vTextureCoord = aTextureCoord;\n  vPosition = (uMVMatrix * vec4(position, 1.0)).xyz;\n  // vPosition = (uMVMatrix * vec4(aVertexPosition, 1.0)).xyz;\n  vNormal = (uNMatrix * vec4(normal, 1.0)).xyz;\n}\n';
 
   MMD.ShadowMap = (function() {
     function ShadowMap(mmd) {
