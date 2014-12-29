@@ -131,7 +131,7 @@ class this.MMD.PMXRenderer
       {attribute: 'aBone2Rotation', array: rotations2, size: 4},
       {attribute: 'aBone3Rotation', array: rotations3, size: 4},
       {attribute: 'aBone4Rotation', array: rotations4, size: 4},
-      {attribute: 'aVertexPosition', array: positions, size: 3},
+      # {attribute: 'aVertexPosition', array: positions, size: 3},
       {attribute: 'aVertexNormal', array: normals, size: 3},
       {attribute: 'aTextureCoord', array: uvs, size: 2}
     ]
