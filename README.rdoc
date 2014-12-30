@@ -8,9 +8,6 @@ MikuMikuDance player on WebGL.
 - Shader that's almost compatible with MMD
 - Camera, light and morph animation
 
-== Demo
-http://www.cs.utexas.edu/~jhcty11/MMD.js/
-
 Yet to come
 
 - Bone animation
@@ -29,7 +26,16 @@ Likely NOT to come
 == Build
 
 ```
-coffee --join MMD.js --compile src/MMD.coffee src/MMD.*.coffee
+cake build
+
+cake watch
+```
+
+== Run
+```
+node server.js
+
+http://localhost:8000
 ```
 
 == Dependence
