@@ -163,6 +163,7 @@ class this.MMD
 
     @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
     @gl.viewport(0, 0, @width, @height)
+    @gl.clearColor(0.0,0.0,0.0,1.0)
     @gl.clear(@gl.COLOR_BUFFER_BIT | @gl.DEPTH_BUFFER_BIT)
 
     for key, renderer of @renderers
@@ -171,10 +172,10 @@ class this.MMD
       renderer.render()
       @mvPopMatrix()
 
-    # # reset
-    # @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
-    # @gl.viewport(0, 0, @width, @height) # not needed on Windows Chrome but necessary on Mac Chrome
-    #
+    # reset
+    @gl.bindFramebuffer(@gl.FRAMEBUFFER, null)
+    @gl.viewport(0, 0, @width, @height) # not needed on Windows Chrome but necessary on Mac Chrome
+
     # @computeMatrices(mat4.createIdentity())
     # @setPMDUniforms()
     # @renderAxes()

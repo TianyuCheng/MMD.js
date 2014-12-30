@@ -266,6 +266,7 @@ class this.MMD.PMXRenderer
       @playing = false
       return
 
+    # @playing = false    # debug
     # @frame = 0
 
     # @moveCamera()
@@ -357,8 +358,8 @@ class this.MMD.PMXRenderer
       parentBones[i] = bone.parent_bone_index
       if bone.name.indexOf('\u3072\u3056') > 0 # ひざ
         constrainedBones[i] = true # TODO: for now it's only for knees, but extend this if I do PMX
-      if bone.rad_limited
-        contrainedBones[i] = true
+      if bone.ik_flag and bone.ik_rad_limited
+        constrainedBones[i] = true  # This is for PMX
 
     getBoneMotion = (boneIndex) ->
       motion = boneMotions[boneIndex]
@@ -375,9 +376,10 @@ class this.MMD.PMXRenderer
           r: r
           tainted: false
         }
-      else
+      else # not reaching the farmost parent yet, do it recursively
         parentIndex = parentBones[boneIndex]
         parentMotion = getBoneMotion(parentIndex)
+        # calculate the relative position and forward kinematics
         r = quat4.multiply(parentMotion.r, r, r)
         p = vec3.subtract(p, originalBonePositions[parentIndex])
         vec3.add(p, t)
@@ -411,8 +413,8 @@ class this.MMD.PMXRenderer
           break if minLength > vec3.length(
             vec3.subtract(targetPos, ikbonePos, axis)) # temporary use of axis
 
-          for child_bones, i in ik.child_bones
-            boneIndex = child_bones.link_index
+          for child_bone, i in ik.child_bones
+            boneIndex = child_bone.link_index
             motion = getBoneMotion(boneIndex)
             bonePos = motion.p
             targetPos = getBoneMotion(targetIndex).p if i > 0
@@ -426,10 +428,17 @@ class this.MMD.PMXRenderer
             axisLen = vec3.length(axis)
             sinTheta = axisLen / ikboneVecLen / targetVecLen
             continue if sinTheta < 0.001 # ~0.05 degree
-            maxangle = (i + 1) * ik.control_weight * 4 # angle to move in one iteration
+
+            # if child_bone.rad_limited:
+            
+            # maxangle = (i + 1) * ik.control_weight * 4 # angle to move in one iteration
+            # maxangle = (i + 1) * child_bone.upper_vector     # angle to move in one iteration
+            # minangle = (i + 1) * child_bone.lower_vector
+
             theta = Math.asin(sinTheta)
             theta = 3.141592653589793 - theta if vec3.dot(targetVec, ikboneVec) < 0
-            theta = maxangle if theta > maxangle
+            # theta = maxangle if theta > maxangle
+
             q = quat4.set(vec3.scale(axis, Math.sin(theta / 2) / axisLen), tmpQ) # q is tmpQ
             q[3] = Math.cos(theta / 2)
             parentRotation = getBoneMotion(parentBones[boneIndex]).r
@@ -449,7 +458,7 @@ class this.MMD.PMXRenderer
             quat4.multiply(q, motion.r, motion.r)
 
             # taint for re-calculation
-            # boneMotions[ik.child_bones[j]].tainted = true for j in [0...i]
+            boneMotions[ik.child_bones[j].link_index].tainted = true for j in [0...i]
             boneMotions[ik.target_bone_index].tainted = true
 
     resolveIKs()

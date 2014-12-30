@@ -190,6 +190,7 @@ this.MMD = (function() {
     this.redraw = false;
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
     this.gl.viewport(0, 0, this.width, this.height);
+    this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
     _ref = this.renderers;
     for (key in _ref) {
@@ -199,6 +200,8 @@ this.MMD = (function() {
       renderer.render();
       this.mvPopMatrix();
     }
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    this.gl.viewport(0, 0, this.width, this.height);
     this.gl.flush();
   };
 
@@ -3465,8 +3468,8 @@ this.MMD.PMXRenderer = (function() {
       if (bone.name.indexOf('\u3072\u3056') > 0) {
         constrainedBones[i] = true;
       }
-      if (bone.rad_limited) {
-        contrainedBones[i] = true;
+      if (bone.ik_flag && bone.ik_rad_limited) {
+        constrainedBones[i] = true;
       }
     }
     getBoneMotion = function(boneIndex) {
@@ -3501,7 +3504,7 @@ this.MMD.PMXRenderer = (function() {
       }
     };
     resolveIKs = function() {
-      var axis, axisLen, boneIndex, bonePos, bone_index, c, child_bones, ik, ikbonePos, ikboneVec, ikboneVecLen, maxangle, minLength, motion, n, parentRotation, q, r, sinTheta, targetIndex, targetPos, targetVec, targetVecLen, theta, tmpQ, tmpR, _j, _len1, _ref2, _results;
+      var axis, axisLen, boneIndex, bonePos, bone_index, c, child_bone, ik, ikbonePos, ikboneVec, ikboneVecLen, j, minLength, motion, n, parentRotation, q, r, sinTheta, targetIndex, targetPos, targetVec, targetVecLen, theta, tmpQ, tmpR, _j, _len1, _ref2, _results;
       targetVec = vec3.create();
       ikboneVec = vec3.create();
       axis = vec3.create();
@@ -3527,12 +3530,12 @@ this.MMD.PMXRenderer = (function() {
               break;
             }
             _results1.push((function() {
-              var _l, _len2, _ref4, _results2;
+              var _l, _len2, _m, _ref4, _results2;
               _ref4 = ik.child_bones;
               _results2 = [];
               for (i = _l = 0, _len2 = _ref4.length; _l < _len2; i = ++_l) {
-                child_bones = _ref4[i];
-                boneIndex = child_bones.link_index;
+                child_bone = _ref4[i];
+                boneIndex = child_bone.link_index;
                 motion = getBoneMotion(boneIndex);
                 bonePos = motion.p;
                 if (i > 0) {
@@ -3554,13 +3557,9 @@ this.MMD.PMXRenderer = (function() {
                 if (sinTheta < 0.001) {
                   continue;
                 }
-                maxangle = (i + 1) * ik.control_weight * 4;
                 theta = Math.asin(sinTheta);
                 if (vec3.dot(targetVec, ikboneVec) < 0) {
                   theta = 3.141592653589793 - theta;
-                }
-                if (theta > maxangle) {
-                  theta = maxangle;
                 }
                 q = quat4.set(vec3.scale(axis, Math.sin(theta / 2) / axisLen), tmpQ);
                 q[3] = Math.cos(theta / 2);
@@ -3576,6 +3575,9 @@ this.MMD.PMXRenderer = (function() {
                 }
                 quat4.normalize(r, individualBoneMotions[boneIndex].rotation);
                 quat4.multiply(q, motion.r, motion.r);
+                for (j = _m = 0; 0 <= i ? _m < i : _m > i; j = 0 <= i ? ++_m : --_m) {
+                  boneMotions[ik.child_bones[j].link_index].tainted = true;
+                }
                 _results2.push(boneMotions[ik.target_bone_index].tainted = true);
               }
               return _results2;

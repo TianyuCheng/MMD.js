@@ -9,13 +9,13 @@ window.onload = function() {
   // testImage("model/Tda_Miku/body00_MikuAp.tga.png")
 
   var mmd = new MMD(canvas, canvas.width, canvas.height);
-  mmd.registerKeyListener(document);
-  mmd.registerMouseListener(document);
+  mmd.registerKeyListener(canvas);
+  mmd.registerMouseListener(canvas);
 
   mmd.addModel("miku", new MMD.Model('model', 'Miku_Hatsune_metal.pmd'));
   // mmd.addModel("rin",  new MMD.Model('model', 'Rin_Kagamene_act2.pmd'));
   // mmd.addModel("len",  new MMD.Model('model', 'Len_Kagamine.pmd'));
-  mmd.addModel("Tda_Miku", new MMD.Model('model/Tda_Miku', 'Tda_Miku.pmx'));
+  mmd.addModel("Tda_Miku", new MMD.Model('model/Tda_Miku', 'Tda_Miku_APPEND.pmx'));
 
   // mmd.load(function() {
   //   var miku = mmd.getModelRenderer("miku");
@@ -90,9 +90,7 @@ window.onload = function() {
     
     // var motion = new MMD.Motion('motion/arm.vmd');
     // var motion = new MMD.Motion('motion/test.vmd');
-    // var motion = new MMD.Motion('motion/kishimen.vmd');
-    // var motion = new MMD.Motion('motion/metal_miku.vmd');
-    var motion = new MMD.Motion('motion/tda_miku.vmd');
+    var motion = new MMD.Motion('motion/kishimen.vmd');
     motion.load(function() {
       tda_miku.addModelMotion("motion", motion);
       miku.addModelMotion("motion", motion);
